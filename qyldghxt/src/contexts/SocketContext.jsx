@@ -19,16 +19,21 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      // 通过前端同域与默认 path '/socket.io'，由 Vite 代理到后端 5004
-      const newSocket = io(window.location.origin, { path: '/socket.io' })
-      
+      const newSocket = io(window.location.origin, {
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000,
+        timeout: 10000,
+        autoConnect: true
+      })
+
       newSocket.on('connect', () => {
-        console.log('Socket连接成功')
         newSocket.emit('join-room', `user-${user.id}`)
       })
 
       newSocket.on('data-updated', (data) => {
-        // 处理实时数据更新
         window.dispatchEvent(new CustomEvent('dataUpdated', { detail: data }))
       })
 
@@ -36,9 +41,25 @@ export const SocketProvider = ({ children }) => {
         setOnlineUsers(users)
       })
 
+      newSocket.on('connect_error', () => {})
+      newSocket.on('reconnect_attempt', () => {})
+      newSocket.on('reconnect_error', () => {})
+      newSocket.on('reconnect_failed', () => {})
+
+      const handleOnline = () => {
+        try { newSocket.connect() } catch {}
+      }
+      const handleOffline = () => {
+        try { newSocket.disconnect() } catch {}
+      }
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
+
       setSocket(newSocket)
 
       return () => {
+        window.removeEventListener('online', handleOnline)
+        window.removeEventListener('offline', handleOffline)
         newSocket.close()
       }
     }

@@ -74,16 +74,20 @@ const fieldMaps = {
     created_at: '创建时间'
   },
   actionPlans: {
-    what: '做什么',
-    why: '为什么',
-    who: '谁来做',
-    when: '什么时候',
-    where: '在哪里',
-    how: '怎么做',
-    how_much: '多少钱',
+    goal: '目标',
+    when: '日期',
+    what: '事项',
+    who: '执行人/协同人',
+    how: '策略方法/执行步骤/行动方案',
+    why: '价值',
+    how_much: '投入预算/程度/数量',
     department: '部门',
     priority: '优先级',
     status: '状态',
+    progress: '进度（%）',
+    expected_result: '预期结果',
+    actual_result: '实际结果',
+    remarks: '备注',
     created_at: '创建时间'
   }
 }
@@ -202,8 +206,9 @@ export const exportToPDF = async (elementId, filename) => {
     }
 
     // 使用html2canvas截图
+    const scale = Math.max(2, Math.ceil(window.devicePixelRatio || 2))
     const canvas = await html2canvas(element, {
-      scale: 2,
+      scale,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff'
@@ -213,7 +218,7 @@ export const exportToPDF = async (elementId, filename) => {
     
     // 创建PDF
     const pdf = new jsPDF({
-      orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+      orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     })
@@ -222,16 +227,37 @@ export const exportToPDF = async (elementId, filename) => {
     const pdfHeight = pdf.internal.pageSize.getHeight()
     const imgWidth = canvas.width
     const imgHeight = canvas.height
-    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
-    const imgX = (pdfWidth - imgWidth * ratio) / 2
-    const imgY = 30
-    
-    pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio)
-    
-    // 添加标题
+
+    const marginTop = 20
+    const ratioW = pdfWidth / imgWidth
+    const pageHeightPx = Math.floor((pdfHeight - marginTop) / ratioW)
+
+    const sliceCanvas = (source, startY, height) => {
+      const slice = document.createElement('canvas')
+      slice.width = source.width
+      slice.height = height
+      const ctx = slice.getContext('2d')
+      ctx.drawImage(source, 0, startY, source.width, height, 0, 0, source.width, height)
+      return slice
+    }
+
+    let rendered = 0
+
+    // 添加标题（第一页）
     pdf.setFontSize(16)
-    pdf.text(filename, pdfWidth / 2, 20, { align: 'center' })
-    
+    pdf.text(filename, pdfWidth / 2, 15, { align: 'center' })
+
+    while (rendered < imgHeight) {
+      const sliceHeight = Math.min(pageHeightPx, imgHeight - rendered)
+      const slice = sliceCanvas(canvas, rendered, sliceHeight)
+      const sliceImg = slice.toDataURL('image/png')
+      const displayHeightMm = sliceHeight * ratioW
+      const y = rendered === 0 ? marginTop : 10
+      pdf.addImage(sliceImg, 'PNG', 0, y, pdfWidth, displayHeightMm)
+      rendered += sliceHeight
+      if (rendered < imgHeight) pdf.addPage()
+    }
+
     // 保存PDF
     const fileName = `${filename}_${new Date().toISOString().split('T')[0]}.pdf`
     pdf.save(fileName)
@@ -253,6 +279,9 @@ export const printElement = (elementId) => {
 
     // 创建新的打印窗口
     const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      throw new Error('无法打开打印窗口')
+    }
     
     // 获取当前页面的样式
     const styles = Array.from(document.styleSheets)
@@ -266,7 +295,7 @@ export const printElement = (elementId) => {
         }
       })
       .join('\n')
-    
+
     // 构建打印页面内容
     const printContent = `
       <!DOCTYPE html>
@@ -286,28 +315,172 @@ export const printElement = (elementId) => {
                 padding: 8px 4px;
                 border: 1px solid #000;
               }
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
+            html, body { background: #fff; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #e5e7eb; color: #111827; }
+            @page { size: auto; margin: 10mm; }
           </style>
         </head>
         <body>
           ${element.outerHTML}
           <script>
             window.onload = function() {
-              window.print();
-              window.close();
+              try {
+                setTimeout(function(){ window.focus(); window.print(); }, 500);
+              } catch (e) {}
             }
           </script>
         </body>
       </html>
     `
     
+    printWindow.document.open()
     printWindow.document.write(printContent)
     printWindow.document.close()
+    
+    setTimeout(() => {
+      try {
+        printWindow.focus()
+      } catch (e) {
+        console.error('打印窗口焦点失败:', e)
+      }
+    }, 600)
     
     return { success: true, message: '打印窗口已打开' }
   } catch (error) {
     console.error('打印失败:', error)
     throw new Error(`打印失败: ${error.message}`)
+  }
+}
+
+export const printViaCanvas = async (elementId) => {
+  try {
+    const element = document.getElementById(elementId)
+    if (!element) throw new Error('找不到要打印的元素')
+
+    const scale = Math.max(2, Math.ceil(window.devicePixelRatio || 2))
+    const canvas = await html2canvas(element, {
+      scale,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff'
+    })
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) throw new Error('无法打开打印窗口')
+
+    const ratio = 1 // 在打印窗口按原像素显示由浏览器缩放
+    const slices = []
+    const sliceHeight = Math.min(canvas.height, 1600) // 分片高度，避免一次性过长
+    let rendered = 0
+    while (rendered < canvas.height) {
+      const height = Math.min(sliceHeight, canvas.height - rendered)
+      const slice = document.createElement('canvas')
+      slice.width = canvas.width
+      slice.height = height
+      const ctx = slice.getContext('2d')
+      ctx.drawImage(canvas, 0, rendered, canvas.width, height, 0, 0, canvas.width, height)
+      slices.push(slice.toDataURL('image/png'))
+      rendered += height
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>打印页面</title>
+          <style>
+            body{margin:0;padding:20px;background:#fff}
+            img{display:block;width:100%;margin:0 0 10px 0}
+            @page{size:auto;margin:10mm}
+          </style>
+        </head>
+        <body>
+          ${slices.map(src => `<img src="${src}" />`).join('')}
+        </body>
+      </html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    setTimeout(() => { try { printWindow.focus(); printWindow.print(); } catch {} }, 400)
+    return { success: true }
+  } catch (e) {
+    console.error('Canvas打印失败:', e)
+    throw e
+  }
+}
+
+export const printViaIframe = (elementId) => {
+  try {
+    const element = document.getElementById(elementId)
+    if (!element) throw new Error('找不到要打印的元素')
+
+    const styles = Array.from(document.styleSheets)
+      .map(styleSheet => {
+        try {
+          return Array.from(styleSheet.cssRules)
+            .map(rule => rule.cssText)
+            .join('\n')
+        } catch (e) {
+          return ''
+        }
+      })
+      .join('\n')
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>打印页面</title>
+          <style>
+            ${styles}
+            @media print {
+              body { margin: 0; padding: 20px; }
+              .no-print { display: none !important; }
+              table { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          ${element.outerHTML}
+        </body>
+      </html>
+    `
+
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentWindow.document
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      } catch (e) {
+        console.error('iframe打印失败:', e)
+      } finally {
+        document.body.removeChild(iframe)
+      }
+    }, 300)
+
+    return { success: true }
+  } catch (e) {
+    console.error('Iframe打印失败:', e)
+    throw e
   }
 }
 
@@ -417,6 +590,8 @@ export default {
   exportToExcel,
   exportToPDF,
   printElement,
+  printViaCanvas,
+  printViaIframe,
   batchExport,
   formatDataForExport,
   getExportTemplate,

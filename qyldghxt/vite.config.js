@@ -7,6 +7,7 @@ export default defineConfig({
     port: 3003,
     // 固定端口为 3003；若被占用则直接报错，不自动切换
     strictPort: true,
+    hmr: { overlay: false },
     proxy: {
       '/api': {
         target: 'http://localhost:5004',
@@ -14,7 +15,8 @@ export default defineConfig({
       },
       '/socket.io': {
         target: 'http://localhost:5004',
-        ws: true
+        ws: true,
+        changeOrigin: true
       }
     }
   },

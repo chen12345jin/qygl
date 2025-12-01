@@ -106,7 +106,7 @@ th:last-child, td:last-child {
 .button-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.125rem;
   align-items: center;
   justify-content: flex-start;
 }
@@ -178,6 +178,41 @@ th:last-child, td:last-child {
   white-space: nowrap;
 }
 
+/* 表头与单元格单行省略控制 */
+.th-ellipsis {
+  @apply overflow-hidden whitespace-nowrap;
+  text-overflow: ellipsis;
+}
+.cell-limit {
+  max-width: 32ch;
+}
+
+.table-compact tbody td {
+  @apply py-1;
+}
+.table-compact td > div {
+  @apply leading-tight;
+}
+
+/* 超紧凑表格：用于高密度显示（如2025月度推进表） */
+.table-ultra-compact tbody td {
+  @apply py-0 text-xs;
+}
+.table-ultra-compact td > div {
+  @apply leading-none;
+}
+
+/* Excel风格数据边框，仅作用于数据区，表头不变 */
+.table-excel-borders {
+  border-collapse: collapse;
+}
+.table-excel-borders tbody td {
+  border: 1px solid #e5e7eb; /* gray-200 */
+}
+.table-excel-borders tbody tr {
+  border-bottom: 0 !important;
+}
+
 .text-break {
   word-break: break-word;
   overflow-wrap: break-word;
@@ -196,6 +231,15 @@ th:last-child, td:last-child {
   align-items: center;
   justify-content: center;
   min-height: 200px;
+}
+
+/* 年份选择与添加年份按钮统一样式 */
+.year-select {
+  @apply h-10 w-32 pl-9 pr-3 bg-white text-gray-800 rounded-xl border border-white/30 hover:bg-gray-50 transition-colors text-center;
+}
+
+.year-add-btn {
+  @apply h-10 w-32 px-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md flex items-center gap-2 justify-center;
 }
 
 /* 空状态对齐 */
@@ -224,6 +268,45 @@ th:last-child, td:last-child {
   }
 }
 
+@layer components {
+  .field-category { @apply text-purple-700; }
+  .field-level { @apply text-green-700; }
+  .field-target-name { @apply text-blue-700; }
+  .field-unit { @apply text-teal-700; }
+  .field-owner { @apply text-indigo-700; }
+  .field-annual { @apply text-orange-700; }
+  .field-total { @apply text-blue-700; }
+  .field-current { @apply text-violet-700; }
+  .field-desc { @apply text-pink-700; }
+  .field-actions { @apply text-gray-700; }
+
+  /* 2025 表头背景色（按字段区分） */
+  .head-bg-category { @apply bg-purple-50; }
+  .head-bg-level { @apply bg-green-50; }
+  .head-bg-target-name { @apply bg-blue-50; }
+  .head-bg-unit { @apply bg-teal-50; }
+  .head-bg-owner { @apply bg-indigo-50; }
+  .head-bg-annual { @apply bg-orange-50; }
+  .head-bg-total { @apply bg-blue-50; }
+  .head-bg-current { @apply bg-violet-50; }
+  .head-bg-desc { @apply bg-pink-50; }
+  .head-bg-actions { @apply bg-gray-50; }
+
+  /* 2025 月份表头背景色 */
+  .head-bg-month-1 { @apply bg-indigo-50; }
+  .head-bg-month-2 { @apply bg-teal-50; }
+  .head-bg-month-3 { @apply bg-blue-50; }
+  .head-bg-month-4 { @apply bg-cyan-50; }
+  .head-bg-month-5 { @apply bg-emerald-50; }
+  .head-bg-month-6 { @apply bg-green-50; }
+  .head-bg-month-7 { @apply bg-lime-50; }
+  .head-bg-month-8 { @apply bg-yellow-50; }
+  .head-bg-month-9 { @apply bg-orange-50; }
+  .head-bg-month-10 { @apply bg-amber-50; }
+  .head-bg-month-11 { @apply bg-rose-50; }
+  .head-bg-month-12 { @apply bg-purple-50; }
+}
+
 /* 通用组件样式 */
 .card {
   @apply bg-white rounded-lg shadow-md border border-gray-200;
@@ -232,19 +315,51 @@ th:last-child, td:last-child {
 
 
 .btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  @apply inline-flex items-center justify-center gap-2 h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors duration-200 shadow-sm;
 }
 
 .btn-secondary {
-  @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  @apply inline-flex items-center justify-center gap-2 h-10 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors duration-200 shadow-sm;
 }
 
 .btn-danger {
-  @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  @apply inline-flex items-center justify-center gap-2 h-10 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-colors duration-200 shadow-sm;
+}
+
+/* 年份选择与添加按钮统一高度 */
+.year-select {
+  @apply h-10 pl-8 pr-4 bg-white/90 text-gray-800 rounded-xl border border-white/20 focus:ring-2 focus:ring-blue-300 focus:border-blue-300;
+}
+/* 白色半透明背景按钮 - 用于深色背景（如HeaderBanner） */
+.year-add-btn-light {
+  @apply inline-flex items-center justify-center gap-2 h-10 px-3 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white hover:from-indigo-600 hover:to-violet-700 transition-all duration-300 cursor-pointer shadow-md;
+  pointer-events: auto;
+}
+/* 渐变色按钮 - 用于浅色背景（如Modal Header右侧操作区在某些场景，或者普通页面） */
+/* 但此处为了解决冲突，我们将原来的year-add-btn保留为渐变色，并新建year-add-btn-light */
+.year-add-btn {
+  @apply h-10 w-32 px-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md flex items-center gap-2 justify-center;
 }
 
 .btn-success {
-  @apply bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  @apply inline-flex items-center justify-center gap-2 h-10 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-xl transition-colors duration-200 shadow-sm;
+}
+
+.btn-brand-print {
+  @apply inline-flex items-center justify-center gap-2 px-6 py-3 text-white font-medium rounded-xl transition-all duration-300 shadow-lg ring-1 ring-white/20 hover:ring-2 hover:ring-white/40;
+  background-image: linear-gradient(to right, #3b82f6, #7c3aed);
+}
+.btn-brand-print:hover {
+  background-image: linear-gradient(to right, #2563eb, #6d28d9);
+}
+
+/* 年份选择居中 */
+.select-center {
+  @apply text-center;
+  text-align-last: center;
+}
+.select-center option {
+  text-align: center;
 }
 
 .form-input {
@@ -492,7 +607,7 @@ th:last-child, td:last-child {
 }
 
 .form-field-hint-wrapper {
-  @apply absolute right-3 top-1/2 transform -translate-y-1/2;
+  @apply absolute right-8 top-1/2 transform -translate-y-1/2;
 }
 
 .form-field-hint-icon {
@@ -507,10 +622,7 @@ th:last-child, td:last-child {
   @apply mt-1 text-xs text-red-600 bg-red-50 p-2 rounded border-l-2 border-red-400 flex items-center;
 }
 
-/* 表单网格布局 */
-.form-grid {
-  @apply grid grid-cols-1 md:grid-cols-2 gap-4;
-}
+
 
 /* 按钮组对齐 */
 .button-group {
@@ -525,4 +637,103 @@ th:last-child, td:last-child {
 /* 卡片内容对齐 */
 .card-content {
   @apply p-6;
+}
+/* 隐藏滚动条（容器仍可溢出但不显示滚条） */
+.no-scrollbar {
+  overflow: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.table-excel {
+  table-layout: auto !important;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-excel th,
+.table-excel td {
+  border: 1px solid #e5e7eb;
+}
+
+.table-excel thead th {
+  background-color: #f8fafc;
+  color: #374151;
+}
+
+.table-excel tbody tr:nth-child(even) td {
+  background-color: #fafafa;
+}
+
+.table-excel th,
+.table-excel td {
+  padding: 12px;
+}
+.table-excel th:last-child,
+.table-excel td:last-child {
+  text-align: center !important;
+}
+.th-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.cell-limit {
+  max-width: 6ch;
+  display: block;
+}
+.table-excel-compact thead th {
+  @apply py-1 px-2;
+}
+.table-excel-compact tbody td {
+  @apply py-1 px-2;
+}
+
+/* 5W2H行动计划页面：表头更宽松、固定单行且不出现省略号 */
+.ap-5w2h-relaxed thead th {
+  white-space: nowrap;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  letter-spacing: 0.02em;
+  min-width: 8rem;
+}
+.ap-5w2h-relaxed thead .th-ellipsis.cell-limit {
+  max-width: none;
+  text-overflow: clip;
+}
+/* 5W2H行动计划页面：数据区紧凑行高与间距 */
+.ap-5w2h-relaxed tbody tr {
+  @apply text-xs;
+}
+.ap-5w2h-relaxed tbody td {
+  @apply py-0 px-2;
+}
+.ap-5w2h-relaxed tbody td > div {
+  @apply leading-none;
+}
+/* 5W2H行动计划页面：数据区加垂直滚动并固定表头 */
+.ap-5w2h-scroll {
+  max-height: 50vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.ap-5w2h-scroll thead th {
+  @apply sticky top-0 z-10;
+}
+/* 移动端覆盖：避免全局!important导致行高变大 */
+@media (max-width: 768px) {
+  .ap-5w2h-relaxed tbody td {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+/* 2025年度大事件记录：表头超过5字省略控制 */
+.th-limit-5ch thead .th-ellipsis.cell-limit {
+  max-width: 5ch;
 }

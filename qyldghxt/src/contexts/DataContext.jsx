@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../utils/api'
+import { useSocket } from './SocketContext'
 
 const DataContext = createContext()
 
@@ -14,6 +15,7 @@ export const useData = () => {
 
 export const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(false)
+  const { emitDataUpdate } = useSocket()
 
   // 通用API调用方法
   const handleApiCall = async (operation, showToast = true) => {
@@ -39,7 +41,8 @@ export const DataProvider = ({ children }) => {
         } else if (error.response.status === 404) {
           message = '请求的资源不存在'
         } else if (error.response.data?.error) {
-          message = error.response.data.error
+          const d = error.response.data
+          message = d.error + (d.details ? `：${d.details}` : '')
         } else {
           message = `服务器错误: ${error.response.status}`
         }
@@ -66,6 +69,20 @@ export const DataProvider = ({ children }) => {
       const response = await api.get('/departments')
       return response.data
     }, false)
+  }
+
+  const getDingTalkDepartments = async (params = {}) => {
+    return handleApiCall(async () => {
+      const response = await api.get('/dingtalk/departments', { params })
+      return response.data
+    }, false)
+  }
+
+  const syncDepartmentsFromDingTalk = async (data = {}) => {
+    return handleApiCall(async () => {
+      const response = await api.post('/departments/sync-dingtalk', data)
+      return response.data
+    })
   }
 
   const addDepartment = async (data) => {
@@ -95,6 +112,20 @@ export const DataProvider = ({ children }) => {
       const response = await api.get('/employees')
       return response.data
     }, false)
+  }
+
+  const getDingTalkEmployees = async (params = {}) => {
+    return handleApiCall(async () => {
+      const response = await api.get('/dingtalk/employees', { params })
+      return response.data
+    }, false)
+  }
+
+  const syncEmployeesFromDingTalk = async (data = {}) => {
+    return handleApiCall(async () => {
+      const response = await api.post('/employees/sync-dingtalk', data)
+      return response.data
+    })
   }
 
   const addEmployee = async (data) => {
@@ -187,6 +218,7 @@ export const DataProvider = ({ children }) => {
   const addAnnualWorkPlan = async (data) => {
     return handleApiCall(async () => {
       const response = await api.post('/annual-work-plans', data)
+      try { emitDataUpdate('annualWorkPlans', { year: data?.year, action: 'add' }) } catch {}
       return response.data
     })
   }
@@ -194,6 +226,7 @@ export const DataProvider = ({ children }) => {
   const updateAnnualWorkPlan = async (id, data) => {
     return handleApiCall(async () => {
       await api.put(`/annual-work-plans/${id}`, data)
+      try { emitDataUpdate('annualWorkPlans', { year: data?.year, action: 'update' }) } catch {}
       return data
     })
   }
@@ -201,6 +234,7 @@ export const DataProvider = ({ children }) => {
   const deleteAnnualWorkPlan = async (id) => {
     return handleApiCall(async () => {
       await api.delete(`/annual-work-plans/${id}`)
+      try { emitDataUpdate('annualWorkPlans', { action: 'delete' }) } catch {}
       return true
     })
   }
@@ -225,7 +259,7 @@ export const DataProvider = ({ children }) => {
   // 大事件提炼
   const getMajorEvents = async (params = {}) => {
     return handleApiCall(async () => {
-      const response = await api.get('/major-events')
+      const response = await api.get('/major-events', { params })
       return response.data
     }, false)
   }
@@ -254,7 +288,7 @@ export const DataProvider = ({ children }) => {
   // 月度推进计划
   const getMonthlyProgress = async (params = {}) => {
     return handleApiCall(async () => {
-      const response = await api.get('/monthly-progress')
+      const response = await api.get('/monthly-progress', { params })
       return response.data
     }, false)
   }
@@ -283,7 +317,7 @@ export const DataProvider = ({ children }) => {
   // 5W2H行动计划
   const getActionPlans = async (params = {}) => {
     return handleApiCall(async () => {
-      const response = await api.get('/action-plans')
+      const response = await api.get('/action-plans', { params })
       return response.data
     }, false)
   }
@@ -291,6 +325,7 @@ export const DataProvider = ({ children }) => {
   const addActionPlan = async (data) => {
     return handleApiCall(async () => {
       const response = await api.post('/action-plans', data)
+      try { emitDataUpdate('actionPlans', { year: data?.year, action: 'add' }) } catch {}
       return response.data
     })
   }
@@ -298,6 +333,7 @@ export const DataProvider = ({ children }) => {
   const updateActionPlan = async (id, data) => {
     return handleApiCall(async () => {
       await api.put(`/action-plans/${id}`, data)
+      try { emitDataUpdate('actionPlans', { year: data?.year, action: 'update' }) } catch {}
       return data
     })
   }
@@ -305,6 +341,7 @@ export const DataProvider = ({ children }) => {
   const deleteActionPlan = async (id) => {
     return handleApiCall(async () => {
       await api.delete(`/action-plans/${id}`)
+      try { emitDataUpdate('actionPlans', { action: 'delete' }) } catch {}
       return true
     })
   }
@@ -375,23 +412,52 @@ export const DataProvider = ({ children }) => {
     }, false)
   }
 
-  const addSystemSetting = async (data) => {
+  const addSystemSetting = async (data, showToast = true) => {
     return handleApiCall(async () => {
       const response = await api.post('/system-settings', data)
       return response.data
-    })
+    }, showToast)
   }
 
-  const updateSystemSetting = async (id, data) => {
+  const updateSystemSetting = async (id, data, showToast = true) => {
     return handleApiCall(async () => {
       await api.put(`/system-settings/${id}`, data)
       return data
-    })
+    }, showToast)
   }
 
   const deleteSystemSetting = async (id) => {
     return handleApiCall(async () => {
       await api.delete(`/system-settings/${id}`)
+      return true
+    })
+  }
+
+  // 系统公告 / 通知
+  const getNotifications = async () => {
+    return handleApiCall(async () => {
+      const response = await api.get('/notifications')
+      return response.data
+    }, false)
+  }
+
+  const addNotification = async (data) => {
+    return handleApiCall(async () => {
+      const response = await api.post('/notifications', data)
+      return response.data
+    })
+  }
+
+  const updateNotification = async (id, data) => {
+    return handleApiCall(async () => {
+      await api.put(`/notifications/${id}`, data)
+      return data
+    })
+  }
+
+  const deleteNotification = async (id) => {
+    return handleApiCall(async () => {
+      await api.delete(`/notifications/${id}`)
       return true
     })
   }
@@ -411,28 +477,23 @@ export const DataProvider = ({ children }) => {
   // 公司信息
   const getCompanyInfo = async () => {
     return handleApiCall(async () => {
-      try {
-        const response = await api.get('/company-info')
-        return response.data
-      } catch (err) {
-        // 后端未提供接口时，回退到本地存储
-        const cached = localStorage.getItem('companyInfo')
-        return cached ? JSON.parse(cached) : {}
-      }
+      const response = await api.get('/company-info')
+      return response.data
     }, false)
   }
 
   const updateCompanyInfo = async (data) => {
     return handleApiCall(async () => {
-      try {
-        const response = await api.put('/company-info', data)
-        return response.data
-      } catch (err) {
-        // 回退到本地存储
-        localStorage.setItem('companyInfo', JSON.stringify(data))
-        return data
-      }
+      const response = await api.put('/company-info', data)
+      return response.data
     })
+  }
+
+  const getIntegrationStatus = async () => {
+    return handleApiCall(async () => {
+      const response = await api.get('/integration/status')
+      return response.data
+    }, false)
   }
 
   const value = {
@@ -441,10 +502,14 @@ export const DataProvider = ({ children }) => {
     addDepartment,
     updateDepartment,
     deleteDepartment,
+    getDingTalkDepartments,
+    syncDepartmentsFromDingTalk,
     getEmployees,
     addEmployee,
     updateEmployee,
     deleteEmployee,
+    getDingTalkEmployees,
+    syncEmployeesFromDingTalk,
     getUsers,
     addUser,
     updateUser,
@@ -485,9 +550,15 @@ export const DataProvider = ({ children }) => {
     addSystemSetting,
     updateSystemSetting,
     deleteSystemSetting,
+    getNotifications,
+    addNotification,
+    updateNotification,
+    deleteNotification,
     uploadFile,
     getCompanyInfo,
     updateCompanyInfo
+    ,
+    getIntegrationStatus
   }
 
   return (

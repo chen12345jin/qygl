@@ -18,7 +18,8 @@ import {
   ChevronDown,
   ChevronRight,
   Menu,
-  Info
+  Info,
+  GitBranch
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -43,6 +44,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
     { id: 'company-info', icon: Info, label: '公司信息', path: '/system/company-info' },
     { id: 'departments', icon: Building2, label: '部门管理', path: '/system/departments' },
     { id: 'employees', icon: Users, label: '员工管理', path: '/system/employees' },
+    { id: 'org-structure', icon: GitBranch, label: '组织架构', path: '/system/org-structure' },
     { id: 'users', icon: Shield, label: '用户权限', path: '/system/users' },
     { id: 'templates', icon: FileText, label: '模板设置', path: '/system/templates' },
     { id: 'settings', icon: Settings, label: '系统设置', path: '/system/settings' },
@@ -170,9 +172,9 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
         </div>
       </nav>
       
+      {/* 系统状态 */}
       <div className="p-4 border-t border-slate-200/50 bg-gradient-to-r from-blue-500/5 to-purple-500/5">
         <div className="text-sm font-semibold text-green-700">系统运行正常</div>
-        <div className="mt-1 text-xs text-slate-700">泉州太禾服饰有限公司 · v1.0.0</div>
       </div>
     </div>
   )

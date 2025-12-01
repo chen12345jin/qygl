@@ -9,6 +9,7 @@ const Major = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, id: null, name: '' })
+  const YEAR = 2025
   const [formData, setFormData] = useState({
     event_name: '',
     event_type: '',
@@ -18,16 +19,25 @@ const Major = () => {
     monthly_plan: ''
   })
 
-  const dimensions = ['产品供应链', '团队建设', '渠道流量', '其他动作']
-  const eventTypes = ['战略性事件', '运营性事件', '风险性事件', '机会性事件']
-  const importanceLevels = ['高', '中', '低']
+  const EVENT_TYPES = [
+    { value: 'strategic', label: '战略性事件' },
+    { value: 'operational', label: '运营性事件' },
+    { value: 'risk', label: '风险性事件' },
+    { value: 'opportunity', label: '机会性事件' }
+  ]
+  const IMPORTANCE_LEVELS = [
+    { value: 'critical', label: '非常重要' },
+    { value: 'high', label: '重要' },
+    { value: 'medium', label: '一般' },
+    { value: 'low', label: '较低' }
+  ]
 
   useEffect(() => {
     loadEvents()
   }, [])
 
   const loadEvents = async () => {
-    const result = await getMajorEvents()
+    const result = await getMajorEvents({ year: YEAR })
     if (result.success) {
       setMajorEvents(result.data || [])
     }
@@ -35,12 +45,20 @@ const Major = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const month = parseInt(String(formData.monthly_plan || '').trim())
+    const planned_date = !isNaN(month) && month >= 1 && month <= 12
+      ? `${YEAR}-${String(month).padStart(2, '0')}-01`
+      : ''
     const eventData = {
-      ...formData,
-      year: new Date().getFullYear(),
-      department_id: 1 // 默认部门ID，可以根据需要调整
+      event_name: formData.event_name,
+      event_type: formData.event_type,
+      importance: formData.importance,
+      description: formData.description,
+      responsible_person: formData.responsible,
+      planned_date,
+      year: YEAR,
+      department_id: 1
     }
-    
     if (editingId) {
       const result = await updateMajorEvent(editingId, eventData)
       if (result.success) {
@@ -70,14 +88,14 @@ const Major = () => {
   }
 
   const handleEdit = (item) => {
-    // 将后端数据映射到表单字段
+    const month = item.planned_date ? (new Date(item.planned_date).getMonth() + 1) : ''
     setFormData({
       event_name: item.event_name || '',
       event_type: item.event_type || '',
       importance: item.importance || '',
       description: item.description || '',
-      responsible: item.responsible || '',
-      monthly_plan: item.monthly_plan || ''
+      responsible: item.responsible_person || '',
+      monthly_plan: month || ''
     })
     setIsEditing(true)
     setEditingId(item.id)
@@ -103,16 +121,15 @@ const Major = () => {
     setDeleteDialog({ isOpen: false, id: null, name: '' })
   }
 
-  const getEventsByDimension = (dimension) => {
-    // 根据维度筛选事件，这里使用event_type作为维度
-    return majorEvents.filter(event => event.event_type === dimension)
+  const getEventsByDimension = (typeValue) => {
+    return majorEvents.filter(event => event.event_type === typeValue)
   }
 
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-gray-800">大事件提醒</h1>
+          <h1 className="text-2xl font-bold text-gray-800">大事件提醒（2025 同步）</h1>
           <button
             onClick={() => setIsEditing(!isEditing)}
             className="btn-primary flex items-center space-x-2"
@@ -138,34 +155,30 @@ const Major = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  事件类型
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">事件类型</label>
                 <select
                   value={formData.event_type}
-                  onChange={(e) => setFormData({...formData, event_type: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
                   className="form-input"
                   required
                 >
                   <option value="">请选择</option>
-                  {eventTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
+                  {EVENT_TYPES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  重要性
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">重要性</label>
                 <select
                   value={formData.importance}
-                  onChange={(e) => setFormData({...formData, importance: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, importance: e.target.value })}
                   className="form-input"
                   required
                 >
                   <option value="">请选择</option>
-                  {importanceLevels.map(level => (
-                    <option key={level} value={level}>{level}</option>
+                  {IMPORTANCE_LEVELS.map(l => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
                   ))}
                 </select>
               </div>
@@ -194,16 +207,18 @@ const Major = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  月度分配
-                </label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-gray-700 mb-1">计划月份</label>
+                <select
                   value={formData.monthly_plan}
-                  onChange={(e) => setFormData({...formData, monthly_plan: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, monthly_plan: e.target.value })}
                   className="form-input"
                   required
-                />
+                >
+                  <option value="">请选择</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>{m}月</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex items-center space-x-4 mt-4">
@@ -237,12 +252,12 @@ const Major = () => {
               </tr>
             </thead>
             <tbody className="bg-white">
-              {eventTypes.map(eventType => {
-                const events = getEventsByDimension(eventType)
+              {EVENT_TYPES.map(et => {
+                const events = getEventsByDimension(et.value)
                 if (events.length === 0) {
                   return (
-                    <tr key={eventType}>
-                      <td className="table-cell bg-red-100 font-medium">{eventType}</td>
+                    <tr key={et.value}>
+                      <td className="table-cell bg-red-100 font-medium">{et.label}</td>
                       <td className="table-cell" colSpan="6">暂无数据</td>
                     </tr>
                   )
@@ -254,14 +269,14 @@ const Major = () => {
                         className="table-cell bg-red-100 font-medium" 
                         rowSpan={events.length}
                       >
-                        {eventType}
+                        {et.label}
                       </td>
                     )}
                     <td className="table-cell">{event.event_name}</td>
-                    <td className="table-cell">{event.importance}</td>
+                    <td className="table-cell">{IMPORTANCE_LEVELS.find(l => l.value === event.importance)?.label || '-'}</td>
                     <td className="table-cell">{event.description}</td>
-                    <td className="table-cell">{event.responsible}</td>
-                    <td className="table-cell">{event.monthly_plan}</td>
+                    <td className="table-cell">{event.responsible_person || '-'}</td>
+                    <td className="table-cell">{event.planned_date ? `${new Date(event.planned_date).getMonth() + 1}月` : '-'}</td>
                     <td className="table-cell">
                       <div className="flex items-center space-x-2">
                         <button

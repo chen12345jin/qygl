@@ -14,7 +14,7 @@ import {
   DollarSign,
   Award
 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts'
 
 // 优化的统计卡片组件
 const StatCard = React.memo(({ stat, onClick }) => {
@@ -24,13 +24,13 @@ const StatCard = React.memo(({ stat, onClick }) => {
       className={`${stat.bgColor} rounded-xl p-6 cursor-pointer transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl border border-gray-100`}
       onClick={onClick}
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-gray-600 text-sm font-medium mb-2">{stat.title}</p>
-          <p className={`text-3xl font-bold ${stat.textColor}`}>{stat.value}</p>
-        </div>
-        <div className={`${stat.color} p-3 rounded-lg shadow-md`}>
+      <div className="flex items-center space-x-4">
+        <div className={`${stat.color} w-10 h-10 rounded-lg flex items-center justify-center shadow-md`}>
           <Icon className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <p className={`text-3xl font-bold ${stat.textColor}`}>{stat.value}</p>
+          <p className="text-gray-600 text-sm">{stat.title}</p>
         </div>
       </div>
     </div>
@@ -114,21 +114,38 @@ const Dashboard = () => {
         actionPlans: getPlanCount()
       })
 
-      // 生成图表数据（改用月度推进数据：目标 vs 实际）
+      // 生成图表数据（优先使用月度推进：实际 vs 目标；无数据则回退到部门目标分解）
+      let chartArray = []
       if (monthlyResult?.success && Array.isArray(monthlyResult.data) && monthlyResult.data.length > 0) {
         const monthlyData = monthlyResult.data.reduce((acc, item) => {
           if (!item || typeof item !== 'object') return acc
-          const m = `${item.month || 1}月`
+          const monthNum = Number(item.month) || 1
+          const m = `${monthNum}月`
           if (!acc[m]) acc[m] = { month: m, sales: 0, profit: 0 }
           acc[m].sales += Number(item.actual_value) || 0
           acc[m].profit += Number(item.target_value) || 0
           return acc
         }, {})
-        const chartArray = Object.values(monthlyData)
-        setChartData(Array.isArray(chartArray) ? chartArray : [])
-      } else {
-        setChartData([])
+        const fullMonths = Array.from({ length: 12 }, (_, i) => `${i + 1}月`)
+        chartArray = fullMonths.map(m => (
+          monthlyData[m] ? monthlyData[m] : { month: m, sales: 0, profit: 0 }
+        ))
+      } else if (targetResult?.success && Array.isArray(targetResult.data) && targetResult.data.length > 0) {
+        const targetMonthly = targetResult.data.reduce((acc, t) => {
+          if (!t || typeof t !== 'object') return acc
+          const monthNum = Number(t.month) || 1
+          const m = `${monthNum}月`
+          if (!acc[m]) acc[m] = { month: m, sales: 0, profit: 0 }
+          acc[m].sales += Number(t.sales_amount) || 0
+          acc[m].profit += Number(t.profit) || 0
+          return acc
+        }, {})
+        const fullMonths = Array.from({ length: 12 }, (_, i) => `${i + 1}月`)
+        chartArray = fullMonths.map(m => (
+          targetMonthly[m] ? targetMonthly[m] : { month: m, sales: 0, profit: 0 }
+        ))
       }
+      setChartData(chartArray)
     } catch (error) {
       console.error('加载仪表板数据失败:', error)
       // 设置默认值
@@ -140,7 +157,7 @@ const Dashboard = () => {
       })
       setChartData([])
     }
-  }, [getDepartments, getEmployees, getDepartmentTargets, getActionPlans])
+  }, [getDepartments, getEmployees, getDepartmentTargets, getActionPlans, getMonthlyProgress])
 
   useEffect(() => {
     loadDashboardData()
@@ -203,11 +220,25 @@ const Dashboard = () => {
 
   // 确保 chartData 是数组
   const safeChartData = useMemo(() => Array.isArray(chartData) ? chartData : [], [chartData])
+  const avgSales = useMemo(() => {
+    const arr = safeChartData || []
+    if (!arr.length) return 0
+    return arr.reduce((s, i) => s + (Number(i.sales) || 0), 0) / arr.length
+  }, [safeChartData])
+  const avgProfit = useMemo(() => {
+    const arr = safeChartData || []
+    if (!arr.length) return 0
+    return arr.reduce((s, i) => s + (Number(i.profit) || 0), 0) / arr.length
+  }, [safeChartData])
+  const formatNumber = useCallback((v) => {
+    const n = Number(v) || 0
+    return n.toLocaleString('zh-CN')
+  }, [])
 
   return (
     <div className="space-y-8">
       {/* 欢迎区域 - 现代化设计 */}
-      <div className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-2xl shadow-2xl p-8 text-white overflow-hidden">
+      <div className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-2xl shadow-2xl p-8 text-white overflow-hidden min-h-[72px]">
         {/* 背景装饰元素 */}
         <div className="absolute top-0 left-0 w-full h-full opacity-10">
           <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full animate-blob"></div>
@@ -251,27 +282,39 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* 月度销售图表 */}
         <div 
-          className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100"
+          className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-0 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100"
           onClick={() => navigate('/data-analysis')}
         >
-          <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center justify-between px-4 py-3">
             <h2 className="text-xl font-bold text-gray-800 flex items-center">
               <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg mr-3 shadow-md">
                 <BarChart3 size={20} className="text-white" />
               </div>
               月度销售趋势
             </h2>
-            <span className="text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent group-hover:scale-105 transition-transform">
-              查看详情 →
-            </span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center text-xs text-gray-700">
+                <span className="w-2 h-2 bg-blue-600 rounded-full mr-2"></span>
+                实际
+              </div>
+              <div className="flex items-center text-xs text-gray-700">
+                <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
+                目标
+              </div>
+              <span className="text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                查看详情 →
+              </span>
+            </div>
           </div>
-          <div className="h-72">
+          <div className="h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={safeChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" stroke="#666" fontSize={12} />
-                <YAxis stroke="#666" fontSize={12} />
+              <BarChart data={safeChartData} margin={{ top: 4, right: 6, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef2ff" />
+                <XAxis dataKey="month" stroke="#475569" fontSize={12} interval={0} tickMargin={2} />
+                <YAxis stroke="#475569" fontSize={12} tickFormatter={formatNumber} />
                 <Tooltip 
+                  formatter={(value, name) => [formatNumber(value), name]}
+                  labelFormatter={(label) => `${label}`}
                   contentStyle={{
                     background: 'rgba(255, 255, 255, 0.95)',
                     border: 'none',
@@ -280,8 +323,10 @@ const Dashboard = () => {
                     fontSize: '12px'
                   }}
                 />
-                <Bar dataKey="sales" name="实际" fill="url(#salesGradient)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="profit" name="目标" fill="url(#profitGradient)" radius={[6, 6, 0, 0]} />
+                <ReferenceLine y={avgSales} stroke="#3b82f6" strokeDasharray="4 4" label={{ value: '实际均值', position: 'right', fill: '#1e3a8a', fontSize: 12 }} />
+                <ReferenceLine y={avgProfit} stroke="#10b981" strokeDasharray="4 4" label={{ value: '目标均值', position: 'right', fill: '#065f46', fontSize: 12 }} />
+                <Bar dataKey="sales" name="实际" fill="url(#salesGradient)" radius={[6, 6, 0, 0]} isAnimationActive />
+                <Bar dataKey="profit" name="目标" fill="url(#profitGradient)" radius={[6, 6, 0, 0]} isAnimationActive />
                 <defs>
                   <linearGradient id="salesGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="#3b82f6" />

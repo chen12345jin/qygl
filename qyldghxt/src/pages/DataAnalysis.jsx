@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useData } from '../contexts/DataContext'
-import { BarChart3, TrendingUp, DollarSign, Target, Calendar, Users, Building2, AlertTriangle } from 'lucide-react'
+import { BarChart3, TrendingUp, DollarSign, Target, Calendar, Users, Building2, AlertTriangle, CheckSquare } from 'lucide-react'
+import PageHeaderBanner from '../components/PageHeaderBanner'
 import { 
   BarChart, 
   Bar, 
@@ -42,10 +43,11 @@ const DataAnalysis = () => {
   const loadData = async () => {
     setLoading(true)
     try {
+      const currentYear = new Date().getFullYear()
       const [targetsRes, eventsRes, progressRes, plansRes, deptsRes, empsRes] = await Promise.all([
-        getDepartmentTargets(),
+        getDepartmentTargets({ year: currentYear }),
         getMajorEvents(),
-        getMonthlyProgress(),
+        getMonthlyProgress({ year: currentYear }),
         getAnnualWorkPlans(),
         getDepartments(),
         getEmployees()
@@ -64,41 +66,53 @@ const DataAnalysis = () => {
     }
   }
 
-  // 按月份的销售数据
-  const monthlySalesData = targets.reduce((acc, target) => {
-    const month = target.month || 0
-    if (!acc[month]) {
-      acc[month] = { month: `${month}月`, amount: 0, profit: 0 }
+  // 按月份的销售数据（补齐 1-12 月）
+  const monthlyByNum = targets.reduce((acc, target) => {
+    const monthNum = Number(target.month) || 0
+    if (monthNum >= 1 && monthNum <= 12) {
+      if (!acc[monthNum]) {
+        acc[monthNum] = { month: `${monthNum}月`, amount: 0, profit: 0 }
+      }
+      acc[monthNum].amount += Number(target.sales_amount) || 0
+      acc[monthNum].profit += Number(target.profit) || 0
     }
-    acc[month].amount += target.sales_amount || 0
-    acc[month].profit += target.profit || 0
     return acc
   }, {})
 
-  const monthlyData = Object.values(monthlySalesData).sort((a, b) => {
-    return parseInt(a.month) - parseInt(b.month)
+  const monthlyData = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1
+    return monthlyByNum[m] ? monthlyByNum[m] : { month: `${m}月`, amount: 0, profit: 0 }
   })
 
-  // 部门业绩对比
-  const departmentPerformance = departments.map(dept => {
+  // 部门完成率对比
+  const departmentCompletionRate = departments.map(dept => {
     const deptTargets = targets.filter(t => t.department === dept.name)
-    const totalSales = deptTargets.reduce((sum, t) => sum + (t.sales_amount || 0), 0)
-    const totalProfit = deptTargets.reduce((sum, t) => sum + (t.profit || 0), 0)
-    const staffCount = deptTargets.reduce((sum, t) => sum + (t.staff_count || 0), 0)
-    
+    const planned = deptTargets.reduce((sum, t) => sum + (t.sales_amount || 0), 0)
+    const actual = deptTargets.reduce((sum, t) => sum + (t.profit || 0), 0)
+
     return {
       name: dept.name,
-      销售额: totalSales,
-      利润: totalProfit,
-      人均产值: staffCount > 0 ? totalProfit / staffCount : 0
+      完成率: planned > 0 ? (actual / planned) * 100 : 0
     }
   })
 
   // 进度完成率
-  const progressData = progress.map(item => ({
-    name: item.target || '目标',
-    完成率: (item.completion_progress || 0) * 100
-  })).slice(0, 10)
+  const progressData = progress
+    .map(item => {
+      const target = Number(item.target_value) || 0
+      const actual = Number(item.actual_value) || 0
+      const rate = target > 0 ? (actual / target) * 100 : 0
+      return {
+        name: item.task_name || `${item.month || ''}月` || '目标',
+        完成率: rate
+      }
+    })
+    .sort((a, b) => {
+      const am = Number(String(a.name).replace('月', '')) || 0
+      const bm = Number(String(b.name).replace('月', '')) || 0
+      return am - bm
+    })
+    .slice(0, 10)
 
   // 大事件分布
   const eventsDistribution = events.reduce((acc, event) => {
@@ -113,6 +127,20 @@ const DataAnalysis = () => {
   }))
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
+  const totalCompletion = progress.reduce((sum, item) => sum + (item.completion_progress || 0), 0)
+  const completionRate = progress.length > 0 ? (totalCompletion / progress.length) * 100 : 0
+  const currentMonth = new Date().getMonth() + 1
+  const monthlyOutput = targets
+    .filter(t => (t.month || 0) === currentMonth)
+    .reduce((sum, t) => sum + (t.sales_amount || 0), 0)
+  const yearlyOutput = targets.reduce((sum, t) => sum + (t.sales_amount || 0), 0)
+  const formatWan = (num) => {
+    const n = Number(num || 0)
+    if (n >= 10000) return `${(n / 10000).toFixed(2)}万`
+    return n.toLocaleString()
+  }
+  const healthIndex = Math.max(0, Math.min(200, Math.round((completionRate / 2) + 100 - (events.length * 1))))
+  const plansCompleted = Array.isArray(plans) ? plans.filter(p => String(p.status).toLowerCase() === 'completed').length : 0
 
   if (loading) {
     return (
@@ -124,25 +152,10 @@ const DataAnalysis = () => {
 
   return (
     <div className="space-y-8">
-      {/* 页面标题 - 优化版 */}
-      <div className="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 rounded-2xl shadow-2xl p-8 text-white overflow-hidden">
-        {/* 背景装饰元素 */}
-        <div className="absolute top-0 left-0 w-full h-full opacity-10">
-          <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full animate-blob"></div>
-          <div className="absolute bottom-10 right-10 w-24 h-24 bg-white rounded-full animate-blob animation-delay-2000"></div>
-          <div className="absolute top-1/2 left-1/2 w-20 h-20 bg-white rounded-full animate-blob animation-delay-4000"></div>
-        </div>
-        
-        <div className="relative flex items-center justify-between">
-          <div>
-            <div className="flex items-center mb-3">
-              <div className="p-3 bg-gradient-to-r from-blue-300 to-purple-300 rounded-xl mr-4">
-                <BarChart3 size={28} className="text-white" />
-              </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">数据分析</h1>
-            </div>
-            <p className="text-blue-100 text-lg">企业年度规划数据综合分析</p>
-          </div>
+      <PageHeaderBanner
+        title="数据分析"
+        subTitle="指标概览与趋势分析"
+        right={(
           <button
             onClick={loadData}
             className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-xl hover:from-yellow-600 hover:to-orange-600 transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center space-x-2"
@@ -150,89 +163,38 @@ const DataAnalysis = () => {
             <TrendingUp size={18} />
             <span>刷新数据</span>
           </button>
-        </div>
-      </div>
+        )}
+      />
 
-      {/* 统计卡片 - 优化版 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
-          {/* 悬停效果装饰 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          
-          <div className="relative flex items-center">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg group-hover:scale-110 transition-transform duration-300">
-              <Building2 size={28} className="text-white" />
-            </div>
-            <div className="ml-5">
-              <p className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                {departments.length}
-              </p>
-              <p className="text-gray-600 font-medium mt-1">部门数量</p>
-            </div>
+      {/* 顶部指标条 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex items-center justify-between h-20 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md">
+          <div className="flex items-center space-x-3">
+            <Target size={24} className="opacity-90" />
+            <span className="text-sm">总目标完成率</span>
           </div>
-          
-          {/* 底部装饰线 */}
-          <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 group-hover:w-full transition-all duration-500 rounded-full"></div>
+          <div className="text-2xl font-bold">{completionRate.toFixed(1)}%</div>
         </div>
-
-        <div className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
-          {/* 悬停效果装饰 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-blue-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          
-          <div className="relative flex items-center">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-green-500 to-blue-500 shadow-lg group-hover:scale-110 transition-transform duration-300">
-              <Users size={28} className="text-white" />
-            </div>
-            <div className="ml-5">
-              <p className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                {employees.length}
-              </p>
-              <p className="text-gray-600 font-medium mt-1">员工总数</p>
-            </div>
+        <div className="flex items-center justify-between h-20 px-6 rounded-xl bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-md">
+          <div className="flex items-center space-x-3">
+            <DollarSign size={24} className="opacity-90" />
+            <span className="text-sm">本月销售额</span>
           </div>
-          
-          {/* 底部装饰线 */}
-          <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-green-500 to-blue-500 group-hover:w-full transition-all duration-500 rounded-full"></div>
+          <div className="text-2xl font-bold">{formatWan(monthlyOutput)}</div>
         </div>
-
-        <div className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
-          {/* 悬停效果装饰 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-pink-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          
-          <div className="relative flex items-center">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 shadow-lg group-hover:scale-110 transition-transform duration-300">
-              <Target size={28} className="text-white" />
-            </div>
-            <div className="ml-5">
-              <p className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                {targets.length}
-              </p>
-              <p className="text-gray-600 font-medium mt-1">目标数量</p>
-            </div>
+        <div className="flex items-center justify-between h-20 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-md">
+          <div className="flex items-center space-x-3">
+            <Users size={24} className="opacity-90" />
+            <span className="text-sm">活跃用户数</span>
           </div>
-          
-          {/* 底部装饰线 */}
-          <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500 group-hover:w-full transition-all duration-500 rounded-full"></div>
+          <div className="text-2xl font-bold">{employees.length}</div>
         </div>
-
-        <div className="group relative bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg p-6 cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-gray-100">
-          {/* 悬停效果装饰 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-orange-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          
-          <div className="relative flex items-center">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-red-500 to-orange-500 shadow-lg group-hover:scale-110 transition-transform duration-300">
-              <AlertTriangle size={28} className="text-white" />
-            </div>
-            <div className="ml-5">
-              <p className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                {events.length}
-              </p>
-              <p className="text-gray-600 font-medium mt-1">大事件数量</p>
-            </div>
+        <div className="flex items-center justify-between h-20 px-6 rounded-xl bg-gradient-to-r from-orange-600 to-red-500 text-white shadow-md">
+          <div className="flex items-center space-x-3">
+            <CheckSquare size={24} className="opacity-90" />
+            <span className="text-sm">计划完成数</span>
           </div>
-          
-          {/* 底部装饰线 */}
-          <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-red-500 to-orange-500 group-hover:w-full transition-all duration-500 rounded-full"></div>
+          <div className="text-2xl font-bold">{plansCompleted}</div>
         </div>
       </div>
 
@@ -245,9 +207,7 @@ const DataAnalysis = () => {
               <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl shadow-lg mr-4">
                 <TrendingUp size={24} className="text-white" />
               </div>
-              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                月度销售额趋势
-              </h3>
+              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">月度目标完成趋势</h3>
             </div>
             <div className="text-sm font-medium bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               实时数据
@@ -256,7 +216,7 @@ const DataAnalysis = () => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={monthlyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" stroke="#666" fontSize={12} />
+              <XAxis dataKey="month" stroke="#666" fontSize={12} interval={0} tickMargin={2} />
               <YAxis stroke="#666" fontSize={12} />
               <Tooltip 
                 formatter={(value) => `¥${value.toLocaleString()}`}
@@ -269,34 +229,32 @@ const DataAnalysis = () => {
                 }}
               />
               <Legend />
-              <Bar dataKey="amount" fill="#8884d8" name="销售额" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="profit" fill="#82ca9d" name="利润" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="amount" fill="#8884d8" name="计划值" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="profit" fill="#82ca9d" name="实际值" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* 部门业绩对比 */}
+        {/* 部门完成率对比 */}
         <div className="group relative bg-gradient-to-br from-white/80 to-green-50/80 backdrop-blur-sm rounded-3xl shadow-2xl p-6 border border-white/20 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center">
               <div className="p-3 bg-gradient-to-r from-green-500 to-blue-500 rounded-2xl shadow-lg mr-4">
                 <BarChart3 size={24} className="text-white" />
               </div>
-              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                部门业绩对比
-              </h3>
+              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">部门完成率对比</h3>
             </div>
             <div className="text-sm font-medium bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
               多维度分析
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={departmentPerformance}>
+            <BarChart data={departmentCompletionRate}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="name" stroke="#666" fontSize={12} />
-              <YAxis stroke="#666" fontSize={12} />
+              <YAxis stroke="#666" fontSize={12} domain={[0, 100]} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} />
               <Tooltip 
-                formatter={(value) => `¥${value.toLocaleString()}`}
+                formatter={(value) => `${Number(value).toFixed(1)}%`}
                 contentStyle={{
                   background: 'rgba(255, 255, 255, 0.95)',
                   border: 'none',
@@ -306,9 +264,8 @@ const DataAnalysis = () => {
                 }}
               />
               <Legend />
-              <Line type="monotone" dataKey="销售额" stroke="#8884d8" strokeWidth={3} dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }} />
-              <Line type="monotone" dataKey="利润" stroke="#82ca9d" strokeWidth={3} dot={{ fill: '#82ca9d', strokeWidth: 2, r: 4 }} />
-            </LineChart>
+              <Bar dataKey="完成率" name="完成率" fill="#82ca9d" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
 
@@ -319,21 +276,19 @@ const DataAnalysis = () => {
               <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg mr-4">
                 <Target size={24} className="text-white" />
               </div>
-              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                进度完成率
-              </h3>
+              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">项目推进趋势</h3>
             </div>
             <div className="text-sm font-medium bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               目标追踪
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={progressData}>
+            <LineChart data={progressData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="name" stroke="#666" fontSize={12} />
               <YAxis stroke="#666" fontSize={12} />
               <Tooltip 
-                formatter={(value) => `${value.toFixed(1)}%`}
+                formatter={(value) => `${Number(value).toFixed(1)}%`}
                 contentStyle={{
                   background: 'rgba(255, 255, 255, 0.95)',
                   border: 'none',
@@ -343,8 +298,8 @@ const DataAnalysis = () => {
                 }}
               />
               <Legend />
-              <Bar dataKey="完成率" fill="#8884d8" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Line type="monotone" dataKey="完成率" stroke="#8884d8" strokeWidth={3} dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }} />
+            </LineChart>
           </ResponsiveContainer>
         </div>
 
@@ -355,9 +310,7 @@ const DataAnalysis = () => {
               <div className="p-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl shadow-lg mr-4">
                 <AlertTriangle size={24} className="text-white" />
               </div>
-              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                大事件分布
-              </h3>
+              <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">事件状态分析</h3>
             </div>
             <div className="text-sm font-medium bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
               事件分析
@@ -393,60 +346,53 @@ const DataAnalysis = () => {
         </div>
       </div>
 
-      {/* 数据汇总表格 - 现代化设计 */}
       <div className="bg-gradient-to-br from-white/80 to-gray-50/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-white/20">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <div className="p-3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl shadow-lg mr-4">
               <BarChart3 size={24} className="text-white" />
             </div>
-            <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-              数据汇总
-            </h3>
+            <h3 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">详细数据分析</h3>
           </div>
-          <div className="text-sm font-medium bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            关键指标
-          </div>
+          <div className="text-sm font-medium bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">概览</div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="group relative bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-lg p-6 border border-blue-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm mb-2 font-medium">计划数</p>
-                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">{plans.length}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-md">
-                <Calendar size={20} className="text-white" />
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 group-hover:w-full transition-all duration-500 rounded-full"></div>
-          </div>
-          
-          <div className="group relative bg-gradient-to-br from-white to-green-50 rounded-2xl shadow-lg p-6 border border-green-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm mb-2 font-medium">推进计划</p>
-                <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent">{progress.length}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-md">
-                <TrendingUp size={20} className="text-white" />
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-green-500 to-green-600 group-hover:w-full transition-all duration-500 rounded-full"></div>
-          </div>
-          
-          <div className="group relative bg-gradient-to-br from-white to-purple-50 rounded-2xl shadow-lg p-6 border border-purple-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm mb-2 font-medium">大事件</p>
-                <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">{events.length}</p>
-              </div>
-              <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl shadow-md">
-                <AlertTriangle size={20} className="text-white" />
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 w-0 h-1 bg-gradient-to-r from-purple-500 to-purple-600 group-hover:w-full transition-all duration-500 rounded-full"></div>
-          </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-gray-600">
+                <th className="text-left py-3 px-4">统计维度</th>
+                <th className="text-left py-3 px-4">数值</th>
+                <th className="text-left py-3 px-4">完成率</th>
+                <th className="text-left py-3 px-4">区域</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-gray-100">
+                <td className="py-3 px-4">部门数量</td>
+                <td className="py-3 px-4">{new Set(targets.map(t => t.department)).size}</td>
+                <td className="py-3 px-4">{completionRate.toFixed(1)}%</td>
+                <td className="py-3 px-4">全局</td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-3 px-4">目标数量</td>
+                <td className="py-3 px-4">{targets.length}</td>
+                <td className="py-3 px-4">{completionRate.toFixed(1)}%</td>
+                <td className="py-3 px-4">全局</td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-3 px-4">事件数量</td>
+                <td className="py-3 px-4">{events.length}</td>
+                <td className="py-3 px-4">{Math.max(0, (100 - events.length)).toFixed(0)}%</td>
+                <td className="py-3 px-4">全局</td>
+              </tr>
+              <tr className="border-t border-gray-100">
+                <td className="py-3 px-4">活跃用户数</td>
+                <td className="py-3 px-4">{employees.length}</td>
+                <td className="py-3 px-4">—</td>
+                <td className="py-3 px-4">全局</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

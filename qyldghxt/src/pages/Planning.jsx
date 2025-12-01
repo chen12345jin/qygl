@@ -4,6 +4,7 @@ import { Calendar, Target, Users, TrendingUp, FileText, Download, Eye } from 'lu
 import { exportToExcel } from '../utils/export'
 import PrintPreview from '../components/PrintPreview'
 import toast from 'react-hot-toast'
+import { computeActionPlanStatus } from '../utils/status'
 
 const Planning = () => {
   const { 
@@ -11,7 +12,8 @@ const Planning = () => {
     getDepartmentTargets, 
     getAnnualWorkPlans, 
     getMajorEvents, 
-    getActionPlans 
+    getActionPlans,
+    getSystemSettings
   } = useData()
   
   const [planningData, setPlanningData] = useState({
@@ -24,6 +26,8 @@ const Planning = () => {
   
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [years, setYears] = useState([2024, 2025, 2026])
+  const [apFilters, setApFilters] = useState({ department: '', status: '', month: '' })
   const [previewData, setPreviewData] = useState({
     isOpen: false,
     title: '',
@@ -36,23 +40,67 @@ const Planning = () => {
     loadPlanningData()
   }, [selectedYear])
 
+  const computeStatus = (progress, when) => computeActionPlanStatus(progress, when)
+
   const loadPlanningData = async () => {
     setLoading(true)
     try {
+      // 读取系统设置中的年份列表与行动计划筛选（保持与行动计划页面一致）
+      try {
+        const settingsRes = await getSystemSettings()
+        const settings = settingsRes?.data || []
+        const found = settings.find(s => s.key === 'planningYears')
+        const currentFound = settings.find(s => s.key === 'currentPlanningYear')
+        const apf = settings.find(s => s.key === 'currentActionPlansFilters')
+        if (found && Array.isArray(found.value)) setYears(found.value)
+        if (currentFound && (typeof currentFound.value === 'number' || typeof currentFound.value === 'string')) {
+          const y = parseInt(currentFound.value)
+          if (!isNaN(y)) setSelectedYear(y)
+        }
+        if (apf && typeof apf.value === 'object') {
+          const v = apf.value || {}
+          setApFilters({
+            department: v.department || '',
+            status: v.status || '',
+            month: v.month || ''
+          })
+        }
+      } catch (_) {}
+
       const [deptResult, targetResult, planResult, eventResult, actionResult] = await Promise.all([
         getDepartments(),
         getDepartmentTargets({ year: selectedYear }),
-        getAnnualWorkPlans(),
-        getMajorEvents(),
-        getActionPlans()
+        getAnnualWorkPlans({ year: selectedYear }),
+        getMajorEvents({ year: selectedYear }),
+        getActionPlans({ year: selectedYear, department: apFilters.department, status: apFilters.status })
       ])
+
+      const rawAP = actionResult?.data || []
+      let apList = rawAP
+      if (apFilters.month) {
+        const m = parseInt(apFilters.month)
+        apList = rawAP.filter(p => {
+          const w = p.when
+          if (!w) return false
+          const d = new Date(w)
+          if (!isNaN(d)) return (d.getMonth() + 1) === m
+          if (typeof w === 'string') {
+            const parts = w.split(/[-\/]/)
+            if (parts.length >= 2) {
+              const mm = parseInt(parts[1])
+              if (!isNaN(mm)) return mm === m
+            }
+          }
+          return false
+        })
+      }
 
       setPlanningData({
         departments: deptResult?.data || [],
         targets: targetResult?.data || [],
         workPlans: planResult?.data || [],
         majorEvents: eventResult?.data || [],
-        actionPlans: actionResult?.data || []
+        actionPlans: apList.map(p => ({ ...p, status: computeStatus(p.progress, p.when) }))
       })
     } catch (error) {
       console.error('加载规划数据失败:', error)
@@ -61,6 +109,20 @@ const Planning = () => {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const handler = (e) => {
+      const d = e.detail || {}
+      const room = d.room || ''
+      if (room === 'actionPlans' || room === 'annualWorkPlans') {
+        if (!d.year || d.year === selectedYear) {
+          loadPlanningData()
+        }
+      }
+    }
+    window.addEventListener('dataUpdated', handler)
+    return () => window.removeEventListener('dataUpdated', handler)
+  }, [selectedYear])
 
   const handleExport = async (dataType, data, filename) => {
     try {
@@ -90,7 +152,14 @@ const Planning = () => {
       data: planningData.targets,
       columns: [
         { key: 'department', label: '部门' },
-        { key: 'target_type', label: '目标类型' },
+        { key: 'target_type', label: '目标类型', render: (v) => ({
+          sales: '销售',
+          profit: '利润',
+          project: '项目',
+          efficiency: '效率',
+          quality: '质量',
+          cost: '成本'
+        })[v] || v },
         { key: 'month', label: '月份' },
         { key: 'sales_amount', label: '销售额' },
         { key: 'profit', label: '利润' },
@@ -175,9 +244,9 @@ const Planning = () => {
             onChange={(e) => setSelectedYear(Number(e.target.value))}
             className="form-select"
           >
-            <option value={2024}>2024年</option>
-            <option value={2025}>2025年</option>
-            <option value={2026}>2026年</option>
+            {years.map(y => (
+              <option key={y} value={y}>{y}年</option>
+            ))}
           </select>
         </div>
       </div>

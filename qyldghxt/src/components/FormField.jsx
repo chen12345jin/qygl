@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ChevronDown } from 'lucide-react';
 
 const FormField = ({ 
   label, 
@@ -29,7 +29,7 @@ const FormField = ({
   };
 
   const baseInputClasses = `
-    w-full px-3 py-2 border rounded-md transition-all duration-200
+    w-full px-3 py-2 border rounded-md transition-all duration-200 placeholder-gray-400 pr-10
     ${focused ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-300'}
     ${error ? 'border-red-500 ring-2 ring-red-200' : ''}
     ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white hover:border-gray-400'}
@@ -40,26 +40,31 @@ const FormField = ({
     switch (type) {
       case 'select':
         return (
-          <select
-            name={name}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            disabled={disabled}
-            className={baseInputClasses}
-          >
-            <option value="">{placeholder || '请选择...'}</option>
-            {options.map((option, index) => (
-              <option key={`${option.value}-${index}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id={`ff-${name}`}
+              name={name}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              disabled={disabled}
+              className={`${baseInputClasses} appearance-none h-10 shadow-sm`}
+            >
+              <option value="">{placeholder || '请选择...'}</option>
+              {options.map((option, index) => (
+                <option key={`${option.value}-${index}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
         );
       case 'textarea':
         return (
           <textarea
+            id={`ff-${name}`}
             name={name}
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -75,6 +80,7 @@ const FormField = ({
         return (
           <input
             type={type}
+            id={`ff-${name}`}
             name={name}
             value={value}
             onChange={(e) => onChange(e.target.value)}
@@ -89,8 +95,8 @@ const FormField = ({
   };
 
   return (
-    <div className="form-field-container">
-      <label className="form-field-label">
+    <div className={`form-field-container ${className}`}>
+      <label className="form-field-label" htmlFor={`ff-${name}`}>
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
