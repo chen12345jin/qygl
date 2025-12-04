@@ -1,24 +1,38 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env?.VITE_API_BASE_URL?.trim() || '/api'
+function getServerUrl() {
+  const v = localStorage.getItem('SERVER_URL') || ''
+  return v.trim()
+}
+
+function getEnvBase() {
+  const v = import.meta.env?.VITE_API_BASE_URL
+  return (v && String(v).trim()) || ''
+}
+
+function resolveBaseURL() {
+  const server = getServerUrl()
+  if (server) return server.replace(/\/+$/,'') + '/api'
+  const env = getEnvBase()
+  if (env) return env
+  return '/api'
+}
 
 export const api = axios.create({
-  baseURL,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// 请求拦截器
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  config.baseURL = resolveBaseURL()
   return config
 })
 
-// 响应拦截器
 api.interceptors.response.use(
   (response) => response,
   (error) => {

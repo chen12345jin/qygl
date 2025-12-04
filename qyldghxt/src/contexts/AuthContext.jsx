@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
     // 检查本地存储中的用户信息
     const checkAuth = () => {
       try {
-        const savedUser = localStorage.getItem('currentUser')
+        const savedUser = sessionStorage.getItem('currentUser')
         if (savedUser && savedUser !== 'undefined' && savedUser !== 'null') {
           const userData = JSON.parse(savedUser)
           if (userData && typeof userData === 'object' && userData.username) {
@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(true)
           } else {
             // 清理无效数据
-            localStorage.removeItem('currentUser')
+            sessionStorage.removeItem('currentUser')
             setUser(null)
             setIsAuthenticated(false)
           }
@@ -65,8 +65,8 @@ export const AuthProvider = ({ children }) => {
 
       // 保存用户信息和token到本地存储
       const { token, user } = data;
-      localStorage.setItem('token', token);
-      localStorage.setItem('currentUser', JSON.stringify(user));
+      sessionStorage.setItem('token', token);
+      sessionStorage.setItem('currentUser', JSON.stringify(user));
       setUser(user);
       setIsAuthenticated(true);
 
@@ -79,8 +79,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     try {
-      localStorage.removeItem('currentUser')
-      localStorage.removeItem('token')
+      sessionStorage.removeItem('currentUser')
+      sessionStorage.removeItem('token')
       setUser(null)
       setIsAuthenticated(false)
       return { success: true }
@@ -102,7 +102,7 @@ export const AuthProvider = ({ children }) => {
         lastActive: new Date().toISOString() 
       }
       
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+      sessionStorage.setItem('currentUser', JSON.stringify(updatedUser))
       setUser(updatedUser)
       return { success: true, user: updatedUser }
     } catch (error) {

@@ -5,22 +5,59 @@ import multer from 'multer'
 import axios from 'axios'
 // import path from 'path' (duplicate removed)
 import { promises as fs } from 'fs'
+import fsSync from 'fs'
 import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import path from 'path'
 import mysql from 'mysql2/promise'
 import dotenv from 'dotenv'
+import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 
 // Load environment variables for local/dev and production
 dotenv.config()
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
 
 const app = express()
-const PORT = 5004
+const PORT = Number(process.env.PORT || 5004)
+const ENABLE_AUTH = String(process.env.ENABLE_AUTH || '').toLowerCase() === 'true'
+const JWT_SECRET = process.env.JWT_SECRET || 'development-only-secret-change-me'
 
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 app.use(cors())
-const upload = multer({ storage: multer.memoryStorage() })
+const uploadsDir = path.join(process.cwd(), 'uploads')
+try { fsSync.mkdirSync(uploadsDir, { recursive: true }) } catch (_) {}
+const diskStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir)
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
+    cb(null, `${Date.now()}-${safeName}`)
+  }
+})
+const upload = multer({ storage: diskStorage })
+app.use('/uploads', express.static(uploadsDir))
+if (ENABLE_AUTH) {
+  const openPaths = new Set([
+    '/api/login',
+    '/api/health',
+    '/api/integration/status'
+  ])
+  app.use((req, res, next) => {
+    if (openPaths.has(req.path) || req.path.startsWith('/uploads') || req.path.startsWith('/backups')) return next()
+    const auth = req.headers['authorization'] || ''
+    const m = auth.match(/^Bearer\s+(.+)$/)
+    if (!m) return res.status(401).json({ error: '未提供授权令牌' })
+    try {
+      const payload = jwt.verify(m[1], JWT_SECRET)
+      req.user = payload
+      return next()
+    } catch (_) {
+      return res.status(401).json({ error: '令牌无效或已过期' })
+    }
+  })
+}
 
 const DB_ENABLED = process.env.DB_ENABLED === 'true'
 let dbPool = null
@@ -89,10 +126,10 @@ async function initDB() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`)
   await dbPool.query(`CREATE TABLE IF NOT EXISTS departments (
-    id INT PRIMARY KEY,
+    id BIGINT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(64) UNIQUE,
-    parent_id INT NULL,
+    parent_id BIGINT NULL,
     manager VARCHAR(255) NULL,
     phone VARCHAR(64) NULL,
     email VARCHAR(255) NULL,
@@ -100,6 +137,9 @@ async function initDB() {
     description TEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`)
+  try {
+    await dbPool.query('ALTER TABLE departments MODIFY id BIGINT PRIMARY KEY')
+  } catch (_) {}
   await dbPool.query(`CREATE TABLE IF NOT EXISTS employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id VARCHAR(64) UNIQUE,
@@ -112,7 +152,22 @@ async function initDB() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`)
 }
-initDB().catch(() => {})
+// helper: build safe update SQL from whitelist
+function buildSafeUpdate(incoming, allowed) {
+  const fields = Object.keys(incoming).filter(k => allowed.includes(k))
+  if (!fields.length) return { setSql: '', values: [] }
+  const setSql = fields.map(k => `${k} = ?`).join(', ')
+  const values = fields.map(k => incoming[k])
+  return { setSql, values }
+}
+
+async function start() {
+  try { await initDB() } catch (e) { console.error('DB init failed:', e?.message || e) }
+  httpServer.listen(PORT, () => {
+    console.log(`Backend server listening on http://localhost:${PORT}`)
+  })
+}
+start()
 // DingTalk helpers
 async function getDingTalkAccessToken() {
   const appKey = process.env.DINGTALK_APP_KEY
@@ -206,8 +261,8 @@ let employees = [
 
 // Users
 let users = [
-  { id: 1, username: 'admin', password: 'admin123', role: '管理员', status: '启用', lastLogin: '从未登录' },
-  { id: 2, username: 'user', password: 'user123', role: '普通用户', status: '启用', lastLogin: '从未登录' }
+  { id: 1, username: 'admin', password: 'admin123', role: '管理员', status: '启用', lastLogin: '从未登录', permissions: ['admin','系统管理','用户管理','数据查看','报表导出'] },
+  { id: 2, username: 'user', password: 'user123', role: '普通用户', status: '启用', lastLogin: '从未登录', permissions: ['数据查看'] }
 ]
 
 // 5W2H Action Plans
@@ -334,20 +389,21 @@ app.post('/api/departments', (req, res) => {
   if (DB_ENABLED && dbPool) {
     (async () => {
       try {
-        const [rows] = await dbPool.query('SELECT COALESCE(MAX(id),0)+1 AS next FROM departments')
-        const nextId = rows[0]?.next || 1
-        await dbPool.query(
-          'INSERT INTO departments (id, name, code, parent_id, manager, phone, email, status, description) VALUES (?,?,?,?,?,?,?,?,?)',
-          [Number(nextId), String(name), code || null, parent_id !== undefined ? Number(parent_id) : null, manager || null, phone || null, email || null, status || 'active', description || null]
+        const [ret] = await dbPool.query(
+          'INSERT INTO departments (name, code, parent_id, manager, phone, email, status, description) VALUES (?,?,?,?,?,?,?,?)',
+          [String(name), code || null, parent_id !== undefined ? Number(parent_id) : null, manager || null, phone || null, email || null, status || 'active', description || null]
         )
-        res.status(201).json({ id: Number(nextId), name, code: code || null, parent_id: parent_id !== undefined ? Number(parent_id) : null, manager: manager || null, phone: phone || null, email: email || null, status: status || 'active', description: description || null })
+        res.status(201).json({ id: ret.insertId, name, code: code || null, parent_id: parent_id !== undefined ? Number(parent_id) : null, manager: manager || null, phone: phone || null, email: email || null, status: status || 'active', description: description || null })
       } catch (e) {
         res.status(500).json({ error: '数据库写入失败' })
       }
     })()
     return
   }
-  const id = departments.length ? Math.max(...departments.map(d => d.id)) + 1 : 1
+  if (!globalThis.__deptId) {
+    globalThis.__deptId = departments.length ? Math.max(...departments.map(d => d.id)) + 1 : 1
+  }
+  const id = globalThis.__deptId++
   const dept = { id, name, code: code || undefined, parent_id: parent_id !== undefined ? Number(parent_id) : undefined, manager, phone, email, status: status || 'active', description }
   departments.push(dept)
   res.status(201).json(dept)
@@ -357,10 +413,9 @@ app.put('/api/departments/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
     const incoming = { ...req.body }
-    const fields = Object.keys(incoming)
-    if (!fields.length) return res.json({ id })
-    const setSql = fields.map(k => `${k} = ?`).join(', ')
-    const values = fields.map(k => incoming[k])
+    const allowed = ['name','code','parent_id','manager','phone','email','status','description']
+    const { setSql, values } = buildSafeUpdate(incoming, allowed)
+    if (!setSql) return res.status(400).json({ error: '无有效更新字段' })
     values.push(id)
     dbPool.query(`UPDATE departments SET ${setSql} WHERE id = ?`, values)
       .then(() => res.json({ id, ...incoming }))
@@ -443,69 +498,57 @@ app.get('/api/dingtalk/departments', async (req, res) => {
 })
 
 app.post('/api/departments/sync-dingtalk', async (req, res) => {
+  console.log('>>> [部门同步] BFS 队列扫描启动')
+  const startTime = Date.now()
   try {
-    const appKey = process.env.DINGTALK_APP_KEY
-    const appSecret = process.env.DINGTALK_APP_SECRET
-    if (!appKey || !appSecret) {
-      return res.status(500).json({ error: '未配置钉钉APP Key/Secret，请在环境变量中设置 DINGTALK_APP_KEY / DINGTALK_APP_SECRET' })
-    }
+    const accessToken = await getDingTalkAccessToken()
     const rootId = Number(req.body?.root_dept_id || process.env.DINGTALK_ROOT_DEPT_ID || 1)
-    const tokenResp = await axios.get('https://oapi.dingtalk.com/gettoken', {
-      params: { appkey: appKey, appsecret: appSecret }
-    })
-    if (!tokenResp.data || tokenResp.data.errcode !== 0 || !tokenResp.data.access_token) {
-      return res.status(500).json({ error: tokenResp.data?.errmsg || '获取钉钉access_token失败' })
-    }
-    const accessToken = tokenResp.data.access_token
-    const out = []
-    async function collect(parentId) {
-      let cursor = 0
-      const size = 100
-      while (true) {
-        const r = await axios.post(`https://oapi.dingtalk.com/topapi/v2/department/listsub?access_token=${accessToken}`,
-          { dept_id: parentId, cursor, size },
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-        if (r.data?.errcode !== 0) {
-          return res.status(500).json({ error: r.data?.errmsg || '获取钉钉部门列表失败' })
-        }
-        const result = r.data?.result || {}
-        const list = Array.isArray(result.list) ? result.list : []
-        out.push(...list.map(d => ({ dept_id: d.dept_id, name: d.name, parent_id: d.parent_id, order: d.order })))
-        const hasMore = Boolean(result.has_more)
-        if (!hasMore) break
-        cursor = Number(result.next_cursor || 0)
-      }
-      const children = out.filter(d => d.parent_id === parentId).map(d => d.dept_id)
-      for (const child of children) {
-        await collect(child)
-      }
-    }
-    await collect(rootId)
+    const queue = [rootId]
     const seen = new Set()
-    const mapped = []
-    for (const d of out) {
-      const k = String(d.dept_id)
-      if (!seen.has(k)) {
-        seen.add(k)
-        mapped.push({ id: d.dept_id, name: d.name || '', code: String(d.dept_id), parent_id: d.parent_id || null })
+    const allDepts = []
+    while (queue.length) {
+      const currentId = queue.shift()
+      if (seen.has(currentId)) continue
+      seen.add(currentId)
+      try {
+        const detailRes = await axios.post(`https://oapi.dingtalk.com/topapi/v2/department/get?access_token=${accessToken}`, { dept_id: currentId })
+        if (detailRes.data.errcode === 0) {
+          const d = detailRes.data.result
+          allDepts.push({ id: d.dept_id, name: d.name, parent_id: d.parent_id ?? null, code: String(d.dept_id) })
+          if (currentId === rootId && d.name) companyInfo = { ...companyInfo, name: d.name }
+        }
+      } catch (_) {}
+      let cursor = 0
+      let foundChild = false
+      while (true) {
+        try {
+          const listRes = await axios.post(`https://oapi.dingtalk.com/topapi/v2/department/listsub?access_token=${accessToken}`, { dept_id: currentId, cursor, size: 100 })
+          if (listRes.data.errcode !== 0) break
+          const sub = listRes.data.result?.list || []
+          if (sub.length > 0) foundChild = true
+          for (const s of sub) {
+            if (!seen.has(s.dept_id)) queue.push(s.dept_id)
+          }
+          if (!listRes.data.result?.has_more) break
+          cursor = listRes.data.result?.next_cursor || 0
+        } catch (e) { break }
+      }
+      if (currentId === rootId && !foundChild) {
+        console.error('!!! 根部门无子部门返回，请检查钉钉通讯录权限范围是否包含全部员工或所有子层级')
       }
     }
     if (DB_ENABLED && dbPool) {
-      // Upsert by id (primary key)
-      const insertSql = 'INSERT INTO departments (id, name, code, parent_id, status) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), code = VALUES(code), parent_id = VALUES(parent_id), status = VALUES(status)'
-      for (const d of mapped) {
-        const vals = [Number(d.id), String(d.name || ''), String(d.code || ''), d.parent_id !== null ? Number(d.parent_id) : null, 'active']
-        try { await dbPool.query(insertSql, vals) } catch (_) {}
+      const sql = 'INSERT INTO departments (id, name, code, parent_id, status) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), code=VALUES(code), parent_id=VALUES(parent_id), status=VALUES(status)'
+      for (const d of allDepts) {
+        await dbPool.query(sql, [Number(d.id), String(d.name || ''), String(d.code || ''), d.parent_id !== null ? Number(d.parent_id) : null, 'active'])
       }
-      const [rows] = await dbPool.query('SELECT COUNT(*) AS c FROM departments')
-      res.json({ success: true, count: Number(rows?.[0]?.c || mapped.length) })
-      return
+      return res.json({ success: true, count: allDepts.length, timeMs: Date.now() - startTime })
     }
-    departments = mapped
-    res.json({ success: true, count: departments.length })
+    departments = allDepts.map(d => ({ id: Number(d.id), name: String(d.name || ''), code: String(d.code || ''), parent_id: d.parent_id !== null ? Number(d.parent_id) : null }))
+    res.json({ success: true, count: departments.length, timeMs: Date.now() - startTime })
   } catch (err) {
-    res.status(500).json({ error: '钉钉部门同步失败', details: err?.response?.data?.errmsg || err?.message || '未知错误' })
+    console.error('部门同步致命错误:', err)
+    res.status(500).json({ error: err.message })
   }
 })
 
@@ -565,10 +608,9 @@ app.put('/api/employees/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
     const incoming = { ...req.body }
-    const fields = Object.keys(incoming)
-    if (!fields.length) return res.json({ id })
-    const setSql = fields.map(k => `${k} = ?`).join(', ')
-    const values = fields.map(k => incoming[k])
+    const allowed = ['employee_id','name','department','position','phone','email','status']
+    const { setSql, values } = buildSafeUpdate(incoming, allowed)
+    if (!setSql) return res.status(400).json({ error: '无有效更新字段' })
     values.push(id)
     dbPool.query(`UPDATE employees SET ${setSql} WHERE id = ?`, values)
       .then(() => res.json({ id, ...incoming }))
@@ -791,131 +833,59 @@ app.get('/api/dingtalk/org-tree', async (req, res) => {
 })
 
 app.post('/api/employees/sync-dingtalk', async (req, res) => {
+  console.log('>>> [员工同步] 基于部门表扫描启动')
+  const startTime = Date.now()
   try {
-    const appKey = process.env.DINGTALK_APP_KEY
-    const appSecret = process.env.DINGTALK_APP_SECRET
-    if (!appKey || !appSecret) {
-      return res.status(500).json({ error: '未配置钉钉APP Key/Secret，请在环境变量中设置 DINGTALK_APP_KEY / DINGTALK_APP_SECRET' })
+    const accessToken = await getDingTalkAccessToken()
+    let targetDeptIds = []
+    const idToName = new Map()
+    if (DB_ENABLED && dbPool) {
+      try {
+        const [rows] = await dbPool.query('SELECT id, name FROM departments')
+        targetDeptIds = rows.map(r => Number(r.id))
+        rows.forEach(r => idToName.set(Number(r.id), String(r.name || '')))
+      } catch (_) {}
     }
-    const all = String(req.body?.all || '').toLowerCase() === 'true'
-    const rootId = Number(req.body?.root_dept_id || process.env.DINGTALK_ROOT_DEPT_ID || 1)
-    const deptId = Number(req.body?.dept_id || process.env.DINGTALK_DEPT_ID || rootId)
-    const tokenResp = await axios.get('https://oapi.dingtalk.com/gettoken', { params: { appkey: appKey, appsecret: appSecret } })
-    if (!tokenResp.data || tokenResp.data.errcode !== 0 || !tokenResp.data.access_token) {
-      return res.status(500).json({ error: tokenResp.data?.errmsg || '获取钉钉access_token失败' })
+    if (!targetDeptIds.length) {
+      const rootId = Number(req.body?.root_dept_id || process.env.DINGTALK_ROOT_DEPT_ID || 1)
+      targetDeptIds = [rootId]
+      try {
+        const r = await axios.post(`https://oapi.dingtalk.com/topapi/v2/department/get?access_token=${accessToken}`, { dept_id: rootId })
+        if (r.data.errcode === 0) idToName.set(rootId, r.data.result.name)
+      } catch (_) {}
     }
-    const accessToken = tokenResp.data.access_token
-    const size = 100
-    const allUsers = []
-
-    async function fetchUsers(dept) {
+    const allEmployees = []
+    const seenUsers = new Set()
+    for (const deptId of targetDeptIds) {
+      const deptName = idToName.get(deptId) || '未知部门'
       let cursor = 0
       while (true) {
-        const listResp = await axios.post(`https://oapi.dingtalk.com/topapi/v2/user/list?access_token=${accessToken}`,
-          { dept_id: dept, cursor, size },
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-        const result = listResp.data?.result || {}
-        if (listResp.data?.errcode !== 0) {
-          return res.status(500).json({ error: listResp.data?.errmsg || '获取钉钉部门用户列表失败' })
-        }
-        const list = Array.isArray(result.list) ? result.list : []
-        allUsers.push(...list.map(u => ({ ...u, _dept: dept })))
-        const hasMore = Boolean(result.has_more)
-        if (!hasMore) break
-        cursor = Number(result.next_cursor || 0)
-      }
-    }
-
-    const deptNameMap = new Map()
-    async function ensureDeptName(id) {
-      if (deptNameMap.has(id)) return
-      try {
-        const deptResp = await axios.post(`https://oapi.dingtalk.com/topapi/v2/department/get?access_token=${accessToken}`,
-          { dept_id: id },
-          { headers: { 'Content-Type': 'application/json' } }
-        )
-        if (deptResp.data?.errcode === 0) {
-          deptNameMap.set(id, deptResp.data?.result?.name || String(id))
-        } else {
-          deptNameMap.set(id, String(id))
-        }
-      } catch (_) {
-        deptNameMap.set(id, String(id))
-      }
-    }
-
-    if (all) {
-      const out = []
-      async function collect(parentId) {
-        let cursor = 0
-        while (true) {
-          const r = await axios.post(`https://oapi.dingtalk.com/topapi/v2/department/listsub?access_token=${accessToken}`,
-            { dept_id: parentId, cursor, size },
-            { headers: { 'Content-Type': 'application/json' } }
-          )
-          if (r.data?.errcode !== 0) {
-            return res.status(500).json({ error: r.data?.errmsg || '获取钉钉部门列表失败' })
+        try {
+          const r = await axios.post(`https://oapi.dingtalk.com/topapi/v2/user/list?access_token=${accessToken}`, { dept_id: deptId, cursor, size: 100 })
+          if (r.data.errcode !== 0) break
+          const list = r.data.result?.list || []
+          for (const u of list) {
+            if (seenUsers.has(u.userid)) continue
+            seenUsers.add(u.userid)
+            allEmployees.push({ userid: u.userid, name: u.name, department: deptName, position: u.title || '', mobile: u.mobile || '', email: u.email || u.org_email || '', active: u.active })
           }
-          const result = r.data?.result || {}
-          const list = Array.isArray(result.list) ? result.list : []
-          out.push(...list.map(d => ({ dept_id: d.dept_id, parent_id: d.parent_id })))
-          const hasMore = Boolean(result.has_more)
-          if (!hasMore) break
-          cursor = Number(result.next_cursor || 0)
-        }
-        const children = out.filter(d => d.parent_id === parentId).map(d => d.dept_id)
-        for (const child of children) {
-          await collect(child)
-        }
+          if (!r.data.result?.has_more) break
+          cursor = r.data.result?.next_cursor || 0
+        } catch (e) { break }
       }
-      await collect(rootId)
-      const deptIds = new Set([rootId, ...out.map(d => d.dept_id)])
-      for (const id of deptIds) {
-        await ensureDeptName(id)
-        await fetchUsers(id)
-      }
-    } else {
-      await ensureDeptName(deptId)
-      await fetchUsers(deptId)
     }
-
-    const seen = new Set()
-    
-    const mapped = []
-    for (const u of allUsers) {
-      const key = String(u.userid)
-      if (seen.has(key)) continue
-      seen.add(key)
-      const deptIdForUser = Array.isArray(u.dept_id_list) && u.dept_id_list.length ? Number(u.dept_id_list[0]) : Number(u._dept || deptId)
-      const deptName = deptNameMap.get(deptIdForUser) || String(deptIdForUser)
-      mapped.push({
-        employee_id: u.userid,
-        name: u.name || '',
-        department: deptName,
-        position: u.title || '',
-        phone: u.mobile || '',
-        email: u.email || u.org_email || '',
-        status: (u.active === true || u.active === 'true') ? 'active' : 'inactive'
-      })
-    }
-
     if (DB_ENABLED && dbPool) {
-      const insertSql = 'INSERT INTO employees (employee_id, name, department, position, phone, email, status) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name = VALUES(name), department = VALUES(department), position = VALUES(position), phone = VALUES(phone), email = VALUES(email), status = VALUES(status)'
-      for (const e of mapped) {
-        const vals = [String(e.employee_id), String(e.name), String(e.department), e.position || null, e.phone || null, e.email || null, e.status || 'active']
-        try { await dbPool.query(insertSql, vals) } catch (_) {}
+      const sql = 'INSERT INTO employees (employee_id, name, department, position, phone, email, status) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), department=VALUES(department), position=VALUES(position), phone=VALUES(phone), status=VALUES(status)'
+      for (const e of allEmployees) {
+        await dbPool.query(sql, [String(e.userid), String(e.name || ''), String(e.department || ''), e.position || null, e.mobile || null, e.email || null, e.active ? 'active' : 'inactive'])
       }
-      const [rows] = await dbPool.query('SELECT COUNT(*) AS c FROM employees')
-      return res.json({ success: true, count: Number(rows?.[0]?.c || mapped.length) })
+      return res.json({ success: true, count: allEmployees.length, timeMs: Date.now() - startTime })
     }
-
-    // Fallback to in-memory
-    employees = mapped.map((e, i) => ({ id: i + 1, ...e }))
-    return res.json({ success: true, count: employees.length })
+    employees = allEmployees.map((e, i) => ({ id: i + 1, employee_id: String(e.userid), name: String(e.name || ''), department: String(e.department || ''), position: e.position || '', phone: e.mobile || '', email: e.email || '', status: e.active ? 'active' : 'inactive' }))
+    res.json({ success: true, count: employees.length, timeMs: Date.now() - startTime })
   } catch (err) {
-    console.error('DingTalk sync error:', err?.response?.data || err?.message || err)
-    res.status(500).json({ error: '钉钉员工信息同步失败', details: err?.response?.data?.errmsg || err?.message || '未知错误' })
+    console.error('员工同步致命错误:', err)
+    res.status(500).json({ error: err.message })
   }
 })
 
@@ -982,26 +952,7 @@ app.delete('/api/action-plans/:id', (req, res) => {
 })
 
 // Simple Auth
-const demoUsers = [
-  {
-    id: 1,
-    username: 'admin',
-    password: 'admin123',
-    role: 'admin',
-    email: 'admin@company.com',
-    department: '技术部',
-    permissions: ['admin', '系统管理', '用户管理', '数据查看', '报表导出']
-  },
-  {
-    id: 2,
-    username: 'user',
-    password: 'user123',
-    role: 'user',
-    email: 'user@company.com',
-    department: '市场部',
-    permissions: ['数据查看']
-  }
-]
+const demoUsers = []
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {}
@@ -1009,12 +960,12 @@ app.post('/api/login', (req, res) => {
     return res.status(400).json({ error: '用户名和密码不能为空' })
   }
 
-  const found = demoUsers.find(u => u.username === String(username) && u.password === String(password))
+  const found = users.find(u => u.username === String(username) && u.password === String(password) && u.status !== '禁用')
   if (!found) {
     return res.status(401).json({ error: '用户名或密码错误' })
   }
 
-  const token = Buffer.from(`${found.username}:${Date.now()}`).toString('base64')
+  const token = jwt.sign({ id: found.id, username: found.username, role: found.role }, JWT_SECRET, { expiresIn: '2h' })
   const { password: _omit, ...safeUser } = found
   const idx = users.findIndex(u => u.username === String(username))
   if (idx !== -1) {
@@ -1101,6 +1052,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 
+app.get('/api/health-check', (req, res) => {
+  res.json({ status: 'ok' })
+})
+
 app.get('/api/integration/status', (req, res) => {
   const dingtalkConfigured = Boolean(process.env.DINGTALK_APP_KEY && process.env.DINGTALK_APP_SECRET)
   res.json({ dingtalkConfigured })
@@ -1179,7 +1134,7 @@ app.post('/api/users', (req, res) => {
     return res.status(400).json({ error: '用户名、密码、角色为必填项' })
   }
   const id = users.length ? Math.max(...users.map(u => u.id)) + 1 : 1
-  const user = { id, username: String(data.username), password: String(data.password), role: String(data.role), status: data.status || '启用', lastLogin: '从未登录' }
+  const user = { id, username: String(data.username), password: String(data.password), role: String(data.role), status: data.status || '启用', lastLogin: '从未登录', permissions: Array.isArray(data.permissions) ? data.permissions : [] }
   users.push(user)
   res.status(201).json(user)
 })
@@ -1188,7 +1143,9 @@ app.put('/api/users/:id', (req, res) => {
   const id = Number(req.params.id)
   const index = users.findIndex(u => u.id === id)
   if (index === -1) return res.status(404).json({ error: '用户不存在' })
-  users[index] = { ...users[index], ...req.body }
+  const incoming = { ...req.body }
+  if (incoming.permissions && !Array.isArray(incoming.permissions)) incoming.permissions = []
+  users[index] = { ...users[index], ...incoming }
   res.json(users[index])
 })
 
@@ -1296,10 +1253,9 @@ app.put('/api/annual-work-plans/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
     const incoming = { ...req.body }
-    const fields = Object.keys(incoming)
-    if (!fields.length) return res.json({ id })
-    const setSql = fields.map(k => `${k} = ?`).join(', ')
-    const values = fields.map(k => incoming[k])
+    const allowed = ['sheet_type','year','month','department_id','department_name','plan_name','category','priority','start_date','end_date','budget','status','responsible_person']
+    const { setSql, values } = buildSafeUpdate(incoming, allowed)
+    if (!setSql) return res.status(400).json({ error: '无有效更新字段' })
     values.push(id)
     dbPool.query(`UPDATE annual_work_plans SET ${setSql} WHERE id = ?`, values)
       .then(() => res.json({ id, ...incoming }))
@@ -1407,10 +1363,9 @@ app.put('/api/major-events/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
     const incoming = { ...req.body }
-    const fields = Object.keys(incoming)
-    if (!fields.length) return res.json({ id })
-    const setSql = fields.map(k => `${k} = ?`).join(', ')
-    const values = fields.map(k => incoming[k])
+    const allowed = ['year','event_name','event_type','importance','planned_date','actual_date','department_id','responsible_department','responsible_person','status','budget','actual_cost','description']
+    const { setSql, values } = buildSafeUpdate(incoming, allowed)
+    if (!setSql) return res.status(400).json({ error: '无有效更新字段' })
     values.push(id)
     dbPool.query(`UPDATE major_events SET ${setSql} WHERE id = ?`, values)
       .then(() => res.json({ id, ...incoming }))
@@ -1522,10 +1477,9 @@ app.put('/api/monthly-progress/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
     const incoming = { ...req.body }
-    const fields = Object.keys(incoming)
-    if (!fields.length) return res.json({ id })
-    const setSql = fields.map(k => `${k} = ?`).join(', ')
-    const values = fields.map(k => incoming[k])
+    const allowed = ['year','month','department','task_name','target_value','actual_value','status','responsible_person','start_date','end_date','key_activities','achievements','challenges','next_month_plan','support_needed']
+    const { setSql, values } = buildSafeUpdate(incoming, allowed)
+    if (!setSql) return res.status(400).json({ error: '无有效更新字段' })
     values.push(id)
     dbPool.query(`UPDATE monthly_progress SET ${setSql} WHERE id = ?`, values)
       .then(() => res.json({ id, ...incoming }))
@@ -1716,7 +1670,8 @@ app.put('/api/company-info', (req, res) => {
 // Upload
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: '未收到文件' })
-  res.json({ filename: req.file.originalname, size: req.file.size })
+  const fileUrl = `/uploads/${encodeURIComponent(path.basename(req.file.filename))}`
+  res.json({ filename: req.file.filename, size: req.file.size, url: fileUrl })
 })
 
 // 404 handler (register at the end)
@@ -1730,6 +1685,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' })
 })
 
-httpServer.listen(PORT, () => {
-  console.log(`Backend server listening on http://localhost:${PORT}`)
-})
+// server start moved to start() above

@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
+import PermissionRoute from './components/PermissionRoute'
 import { AuthProvider } from './contexts/AuthContext'
 import { DataProvider } from './contexts/DataContext'
 import { SocketProvider } from './contexts/SocketContext'
@@ -30,6 +31,7 @@ const TemplateSettings = React.lazy(() => import('./pages/system/TemplateSetting
 const Notifications = React.lazy(() => import('./pages/system/Notifications'))
 const Profile = React.lazy(() => import('./pages/system/Profile'))
 const OrgStructure = React.lazy(() => import('./pages/system/OrgStructure'))
+const ServerConfig = React.lazy(() => import('./pages/ServerConfig'))
 
 // 加载组件
 const LoadingSpinner = () => (
@@ -87,97 +89,102 @@ function App() {
             <ErrorBoundary>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/server-config" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <ServerConfig />
+                </Suspense>
+              } />
               <Route path="/" element={
                 <ProtectedRoute>
                   <Layout />
                 </ProtectedRoute>
               }>
               <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="dashboard" element={<PermissionRoute permission="数据查看"><Dashboard /></PermissionRoute>} />
               <Route path="department-targets" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <DepartmentTargets />
+                  <PermissionRoute permission="数据查看"><DepartmentTargets /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="annual-planning" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <AnnualPlanning />
+                  <PermissionRoute permission="数据查看"><AnnualPlanning /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="annual-planning-chart" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <AnnualPlanningChart />
+                  <PermissionRoute permission="数据查看"><AnnualPlanningChart /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="annual-work-plan" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <AnnualWorkPlan />
+                  <PermissionRoute permission="数据查看"><AnnualWorkPlan /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="major-events" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <MajorEvents />
+                  <PermissionRoute permission="数据查看"><MajorEvents /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="major-events/:year" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <MajorEvents />
+                  <PermissionRoute permission="数据查看"><MajorEvents /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="monthly-progress" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <MonthlyProgress />
+                  <PermissionRoute permission="数据查看"><MonthlyProgress /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="action-plans" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <ActionPlans />
+                  <PermissionRoute permission="数据查看"><ActionPlans /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="data-analysis" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <DataAnalysis />
+                  <PermissionRoute permission="数据查看"><DataAnalysis /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/company-info" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <CompanyInfo />
+                  <PermissionRoute permission="系统管理"><CompanyInfo /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/departments" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <DepartmentManagement />
+                  <PermissionRoute permission="系统管理"><DepartmentManagement /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/employees" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <EmployeeManagement />
+                  <PermissionRoute permission="系统管理"><EmployeeManagement /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/users" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <UserManagement />
+                  <PermissionRoute permission="用户管理"><UserManagement /></PermissionRoute>
                 </Suspense>
               } />
-              <Route path="system/settings" element={<SystemSettings />} />
+              <Route path="system/settings" element={<PermissionRoute permission="系统管理"><SystemSettings /></PermissionRoute>} />
               <Route path="system/templates" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <TemplateSettings />
+                  <PermissionRoute permission="系统管理"><TemplateSettings /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/org-structure" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <OrgStructure />
+                  <PermissionRoute permission="系统管理"><OrgStructure /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/notifications" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <Notifications />
+                  <PermissionRoute permission="数据查看"><Notifications /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/profile" element={
                 <Suspense fallback={<LoadingSpinner />}>
-                  <Profile />
+                  <PermissionRoute permission="数据查看"><Profile /></PermissionRoute>
                 </Suspense>
               } />
             </Route>
