@@ -1,16 +1,38 @@
 import React, { useState, useEffect } from 'react'
 import TableManager from '../../components/TableManager'
 import { useData } from '../../contexts/DataContext'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
+import { useAuth } from '../../contexts/AuthContext'
+import { toast } from 'react-hot-toast'
 
 const EmployeeManagement = () => {
-  const { getEmployees, addEmployee, updateEmployee, deleteEmployee, getDepartments } = useData()
+  const { getEmployees, addEmployee, updateEmployee, deleteEmployee, getDepartments, getDingTalkEmployees, syncEmployeesFromDingTalk, getIntegrationStatus, getSystemSettings } = useData()
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [editingId, setEditingId] = useState(null)
+  const { user, checkPermission } = useAuth()
+  const isAdmin = (user?.role === 'admin') || checkPermission('admin')
+  const [dingtalkEnabled, setDingtalkEnabled] = useState(true)
 
   useEffect(() => {
     loadEmployees()
     loadDepartments()
+    ;(async () => {
+      const r = await getIntegrationStatus()
+      if (r.success) {
+        let enabled = Boolean(r.data?.dingtalkConfigured)
+        if (!enabled) {
+          const s = await getSystemSettings()
+          if (s.success && Array.isArray(s.data)) {
+            const rec = s.data.find(it => it.key === 'integration')
+            const v = rec?.value || {}
+            const hasKeys = Boolean(String(v.dingtalkAppKey || '').trim()) && Boolean(String(v.dingtalkAppSecret || '').trim())
+            enabled = Boolean(v.dingtalkEnabled) && hasKeys
+          }
+        }
+        setDingtalkEnabled(enabled)
+      }
+    })()
   }, [])
 
   const loadEmployees = async () => {
@@ -24,6 +46,20 @@ const EmployeeManagement = () => {
     const result = await getDepartments()
     if (result.success) {
       setDepartments(result.data || [])
+    }
+  }
+
+  const syncFromDingTalk = async () => {
+    try {
+      const result = await syncEmployeesFromDingTalk({ all: true })
+      if (result.success) {
+        await loadEmployees()
+        toast.success(`已全量同步${result.data?.count ?? 0}名员工到数据库`)
+      } else {
+        toast.error(result.error || '同步钉钉员工失败')
+      }
+    } catch (e) {
+      toast.error('同步钉钉员工失败')
     }
   }
 
@@ -98,10 +134,7 @@ const EmployeeManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">员工管理</h1>
-        <p className="text-gray-600">管理企业员工信息和职位分配</p>
-      </div>
+      <PageHeaderBanner title="员工管理" subTitle="员工管理的年度工作落地规划" />
 
       <TableManager
         title="员工列表"
@@ -113,6 +146,16 @@ const EmployeeManagement = () => {
         onCopy={handleCopy}
         editingId={editingId}
         onEditingChange={setEditingId}
+        showActions={isAdmin}
+        headerActionsLeft={isAdmin ? (
+          <button
+            onClick={syncFromDingTalk}
+            disabled={!dingtalkEnabled}
+            className={`px-3 py-2 ${!dingtalkEnabled ? 'bg-gray-300' : 'bg-gradient-to-r from-emerald-500 to-teal-600'} text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold mr-3`}
+          >
+            <span>{dingtalkEnabled ? '同步钉钉员工' : '未配置钉钉'}</span>
+          </button>
+        ) : null}
       />
     </div>
   )

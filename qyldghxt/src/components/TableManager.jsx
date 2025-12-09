@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Copy, X, Check, AlertCircle, Settings, Save } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Plus, Edit, Trash2, Copy, X, Check, AlertCircle, Settings, Save, Eye } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import DeleteConfirmDialog from './DeleteConfirmDialog'
 import InlineAlert from './InlineAlert'
 import FormField from './FormField'
+import Pagination from './Pagination'
 
 const TableManager = ({ 
   title, 
@@ -16,7 +18,40 @@ const TableManager = ({
   editingId, 
   onEditingChange,
   showActions = true,
-  children
+  children,
+  addHeader,
+  addSubHeader,
+  addBadge,
+  addTheme = 'from-blue-500 to-purple-600',
+  prefill = {},
+  addMode = 'modal',
+  editHeader,
+  rowColorBy,
+  rowColorMap = {},
+  headerActionsLeft
+  ,triggerAdd
+  ,triggerPrefill
+  ,hideDefaultAdd = false
+  ,hideHeaderIcon = false
+  ,hideDataList = false
+  ,triggerEdit
+  ,triggerEditPrefill
+  ,tableClassName
+  ,tableContainerClassName
+  ,ellipsisKeys
+  ,ellipsisAll = false
+  ,headerEllipsis = false
+  ,onView
+  ,ellipsisChars = 6
+  ,singleLineNoEllipsis = false
+  ,addHeaderRight
+  ,actionsHeaderClassName
+  ,compact = false
+  ,ultraCompact = false
+  ,medium = false
+  ,stickyHeader = false
+  ,stickyHeaderBgClass
+  ,pagination
 }) => {
   const [isAdding, setIsAdding] = useState(false)
   const [formData, setFormData] = useState({})
@@ -37,6 +72,25 @@ const TableManager = ({
       }
     }
   }, [alertTimeout])
+
+  useEffect(() => {
+    if (triggerAdd) {
+      setFormData(triggerPrefill || prefill || {})
+      setIsAdding(true)
+      try { setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, 0) } catch {}
+    }
+  }, [triggerAdd])
+
+  useEffect(() => {
+    if (triggerEdit) {
+      setFormData(triggerEditPrefill || {})
+      setIsAdding(true)
+      if (onEditingChange && triggerEditPrefill && triggerEditPrefill.id) {
+        onEditingChange(triggerEditPrefill.id)
+      }
+      try { setTimeout(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, 0) } catch {}
+    }
+  }, [triggerEdit])
 
   const showAlertMessage = (message, type = 'success') => {
     // 清除之前的定时器
@@ -60,10 +114,11 @@ const TableManager = ({
     
     // 遍历所有columns，一次性收集所有错误
     columns.forEach(column => {
-      // 必填字段验证
-      if (column.required) {
+      const skipValidation = !!column.disabled
+      if (!skipValidation && column.required) {
         const value = formData[column.key]
-        if (!value || value.toString().trim() === '' || value === 0) {
+        const isEmpty = value === undefined || value === null || (typeof value === 'string' && value.toString().trim() === '')
+        if (isEmpty) {
           newErrors[column.key] = `${column.label}不能为空`
         }
       }
@@ -93,7 +148,7 @@ const TableManager = ({
       }
       
       // Select验证：如果选择了"请选择"选项
-      if (column.type === 'select' && formData[column.key]) {
+      if (!skipValidation && column.type === 'select' && formData[column.key]) {
         if (formData[column.key] === '') {
           if (column.required) {
             newErrors[column.key] = `请选择${column.label}`
@@ -132,13 +187,22 @@ const TableManager = ({
     
     try {
       if (editingId) {
-        await onEdit(editingId, formData)
-        toast.success('更新成功')
+        const ok = await onEdit(editingId, formData)
+        if (ok) {
+          toast.success('更新成功')
+          resetForm()
+        } else {
+          showAlertMessage('未检测到任何改动', 'info')
+        }
       } else {
-        await onAdd(formData)
-        toast.success('添加成功')
+        const ok = await onAdd(formData)
+        if (ok) {
+          toast.success('添加成功')
+          resetForm()
+        } else {
+          showAlertMessage('保存未执行或未通过验证', 'error')
+        }
       }
-      resetForm()
     } catch (error) {
       toast.error('操作失败')
       showAlertMessage('操作失败，请重试', 'error')
@@ -174,7 +238,12 @@ const TableManager = ({
 
   const confirmDelete = async () => {
     try {
-      await onDelete(deleteDialog.itemId)
+      const ok = await onDelete(deleteDialog.itemId)
+      if (ok === false) {
+        toast.error('删除失败')
+        showAlertMessage('删除失败，请重试', 'error')
+        return
+      }
       toast.success('删除成功')
       showAlertMessage('删除成功', 'success')
     } catch (error) {
@@ -194,147 +263,241 @@ const TableManager = ({
     }
   }
 
+  const renderForm = () => (
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+      <div className="p-6 flex-1 pb-24">
+        {alert.show && (
+          <InlineAlert
+            message={alert.message}
+            type={alert.type}
+            onClose={() => setAlert({ ...alert, show: false })}
+            className="mb-6"
+          />
+        )}
+        <div className="form-grid gap-6">
+          {columns.map(column => (
+          <FormField
+            key={column.key}
+            name={column.key}
+            label={column.label}
+            type={column.type || 'text'}
+            value={column.valueParser ? column.valueParser(formData[column.key], formData) : (formData[column.key] || '')}
+            onChange={(value) => {
+              if (column.onChange) {
+                column.onChange(value, setFormData, formData);
+              } else {
+                setFormData({ ...formData, [column.key]: value });
+              }
+              if (errors[column.key]) {
+                setErrors({ ...errors, [column.key]: '' });
+              }
+            }}
+            required={column.required}
+            options={column.options}
+            error={errors[column.key]}
+            hint={column.hint}
+            rows={column.type === 'textarea' ? 3 : undefined}
+            step={column.type === 'number' ? '0.01' : undefined}
+            disabled={column.disabled}
+          />
+          ))}
+        </div>
+      </div>
+      <div className="sticky bottom-0 flex justify-end space-x-3 p-4 border-t border-gray-200 bg-white/95 backdrop-blur z-10">
+        <button type="button" onClick={resetForm} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          取消
+        </button>
+        <button type="submit" className={`px-4 py-2 bg-gradient-to-r ${addTheme} text-white rounded-lg transition-colors flex items-center space-x-2`}>
+          <Save size={18} />
+          <span>{editingId ? `更新${title.replace('管理', '').replace('设置', '')}` : `保存${title.replace('管理', '').replace('设置', '')}`}</span>
+        </button>
+      </div>
+    </form>
+  )
+
   return (
     <div className="space-y-6">
       {/* 标题和操作按钮 - 现代化设计 */}
       <div className="card-header bg-gradient-to-br from-white/80 to-blue-50/80 backdrop-blur-sm rounded-3xl shadow-2xl p-6 border border-white/20">
         <div className="icon-text">
-          <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-2xl shadow-xl">
-            <Settings className="w-6 h-6 text-white" />
-          </div>
+          {!hideHeaderIcon && (
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-2xl shadow-xl">
+              <Settings className="w-6 h-6 text-white" />
+            </div>
+          )}
           <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{title}</h2>
         </div>
         {showActions && (
           <div className="button-group">
-            <button
-              onClick={() => setIsAdding(true)}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 hover:shadow-xl shadow-lg flex items-center space-x-2 font-semibold"
-            >
-              <Plus size={18} />
-              <span>新增{title.replace('管理', '').replace('设置', '')}</span>
-            </button>
+            {headerActionsLeft}
+            {!hideDefaultAdd && (
+              <button
+                onClick={() => { setFormData(prefill || {}); setIsAdding(true) }}
+                className="px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold"
+              >
+                <Plus size={16} />
+                <span>新增{title.replace('管理', '').replace('设置', '')}</span>
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* 表单 - 现代化设计 */}
-      {isAdding && (
-        <form onSubmit={handleSubmit} noValidate className="bg-gradient-to-br from-white/80 to-blue-50/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-white/20">
-          {alert.show && (
-            <InlineAlert
-              message={alert.message}
-              type={alert.type}
-              onClose={() => setAlert({ ...alert, show: false })}
-              className="mb-6"
-            />
-          )}
-          
-          <div className="form-grid">
-            {columns.map(column => (
-              <FormField
-                key={column.key}
-                name={column.key}
-                label={column.label}
-                type={column.type || 'text'}
-                value={formData[column.key] || ''}
-                onChange={(value) => {
-                  // 检查列是否有自定义的onChange处理函数
-                  if (column.onChange) {
-                    column.onChange(value, setFormData, formData);
-                  } else {
-                    setFormData({...formData, [column.key]: value});
-                  }
-                  if (errors[column.key]) {
-                    setErrors({...errors, [column.key]: ''});
-                  }
-                }}
-                required={column.required}
-                options={column.options}
-                error={errors[column.key]}
-                hint={column.hint}
-                rows={column.type === 'textarea' ? 3 : undefined}
-                step={column.type === 'number' ? '0.01' : undefined}
-              />
-            ))}
+      {isAdding && addMode === 'modal' && createPortal(
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[9999] p-4 md:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+          <div className={`relative p-6 border-b border-gray-200 bg-gradient-to-r ${addTheme} shrink-0 z-10 flex items-center justify-between`}>
+              <div className="flex items-center justify-between gap-3 w-full mr-8">
+                <div className="min-w-0">
+                  <div className="text-2xl font-bold text-white truncate">{editingId ? (editHeader || `编辑${title.replace('管理', '').replace('设置', '')}`) : (addHeader || `新增${title.replace('管理', '').replace('设置', '')}`)}</div>
+                  {addSubHeader && <div className="text-white/80 mt-1 text-sm truncate">{addSubHeader}</div>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {addBadge && (
+                    <div className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-semibold">{addBadge}</div>
+                  )}
+                  {addHeaderRight}
+                </div>
+              </div>
+              <button
+                onClick={resetForm}
+                className="absolute right-4 top-6 text-white/80 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            {renderForm()}
           </div>
-          
-          <div className="button-group mt-8">
-            <button type="submit" className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 hover:shadow-xl shadow-lg flex items-center space-x-2 font-semibold">
-              <Save size={18} />
-              <span>{editingId ? `更新${title.replace('管理', '').replace('设置', '')}` : `保存${title.replace('管理', '').replace('设置', '')}`}</span>
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-300 transform hover:scale-105 hover:shadow-xl shadow-lg flex items-center space-x-2 font-semibold"
-            >
-              <X size={18} />
-              <span>取消</span>
-            </button>
+        </div>,
+        document.body
+      )}
+
+      {isAdding && addMode === 'inline' && (
+        <div className="card">
+          <div className="px-6 pt-6">
+            <div className="text-2xl font-semibold text-gray-800">{editingId ? (editHeader || `编辑${title.replace('管理', '').replace('设置', '')}`) : (addHeader || `新增${title.replace('管理', '').replace('设置', '')}`)}</div>
+            {addSubHeader && <div className="text-gray-500 mt-1 text-sm">{addSubHeader}</div>}
           </div>
-        </form>
+          {renderForm()}
+        </div>
       )}
 
       {/* 自定义内容 */}
       {children}
 
       {/* 数据列表 - 现代化设计 */}
-      {data && data.length > 0 && (
+      {!hideDataList && data && data.length > 0 && (
         <div className="bg-gradient-to-br from-white/80 to-blue-50/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
-          <div className="table-responsive">
-            <table className="w-full">
-              <thead>
+        <div className={`table-responsive ${tableContainerClassName || ''} ${stickyHeader ? 'overflow-y-auto max-h-[70vh]' : ''}`}>
+          <table className={`w-full ${tableClassName || ''}`}>
+              <thead className={`${stickyHeader ? `sticky top-0 z-10 ${stickyHeaderBgClass || 'bg-white'}` : ''}`}>
                 <tr>
                   {columns.map(column => (
-                    <th key={column.key} className="px-6 py-5 text-left text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 border-b border-white/30">
-                      {column.label}
+                    <th
+                      key={column.key}
+                      className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : medium ? 'px-4 py-2' : 'px-6 py-5'} text-left ${ultraCompact ? 'text-xs' : 'text-sm'} font-bold ${column.headerClassName || 'text-white bg-gradient-to-r from-blue-600 to-purple-600 border-b border-white/30'}`}
+                    >
+                      {headerEllipsis ? (
+                        <div className={`th-ellipsis cell-limit ${singleLineNoEllipsis ? 'whitespace-nowrap' : ''}`}>{column.label}</div>
+                      ) : (
+                        <div className={`${singleLineNoEllipsis ? 'whitespace-nowrap' : 'leading-tight'}`}>{column.label}</div>
+                      )}
                     </th>
                   ))}
-                  {showActions && <th className="px-6 py-5 text-right text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 border-b border-white/30">操作</th>}
+                  {showActions && (
+                    <th
+                      className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : medium ? 'px-4 py-2' : 'px-6 py-5'} text-center ${ultraCompact ? 'text-xs' : 'text-sm'} font-bold ${typeof actionsHeaderClassName === 'string' ? actionsHeaderClassName : 'text-white bg-gradient-to-r from-blue-600 to-purple-600 border-b border-white/30'}`}
+                    >
+                      操作
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {data.map((item, index) => (
-                  <tr key={item.id || index} className="group hover:bg-gradient-to-r hover:from-blue-50/80 hover:to-purple-50/80 transition-all duration-300 border-b border-gray-100/50">
-                    {columns.map(column => (
-                      <td key={column.key} className="px-6 py-4 text-sm text-gray-800 border-r border-gray-100/50 last:border-r-0">
-                        <div className={column.key.includes('name') || column.key.includes('title') ? 'text-ellipsis' : 'text-break'}>
-                          {column.render ? column.render(item[column.key], item) : item[column.key]}
-                        </div>
-                      </td>
-                    ))}
+                {(() => {
+                  const pg = pagination
+                  const page = pg?.page || 1
+                  const size = pg?.pageSize || data.length
+                  const start = (page - 1) * size
+                  const end = start + size
+                  const list = pg ? data.slice(start, end) : data
+                  return list.map((item, index) => (
+                  <tr key={item.id || index} className={`group transition-all duration-300 border-b border-gray-100/50 hover:bg-gradient-to-r hover:from-blue-50/80 hover:to-purple-50/80 ${ultraCompact ? 'text-[11px] leading-none' : compact ? 'text-[12px] leading-tight' : ''}`}>
+                    {columns.map(column => {
+                      const rowClass = rowColorBy ? (rowColorMap[item[rowColorBy]] || '') : ''
+                      const useEllipsis = ellipsisAll || (Array.isArray(ellipsisKeys) && ellipsisKeys.includes(column.key))
+                      const cellClass = singleLineNoEllipsis
+                        ? 'overflow-hidden whitespace-nowrap'
+                        : useEllipsis
+                          ? 'text-ellipsis cell-limit'
+                          : (column.key.includes('name') || column.key.includes('title')
+                            ? 'text-ellipsis'
+                            : `${ultraCompact ? 'text-xs leading-tight' : compact ? 'leading-tight' : 'leading-relaxed'} text-break whitespace-pre-wrap`)
+                      const displayContent = column.render 
+                        ? column.render(item[column.key], item) 
+                        : (() => {
+                            const v = item[column.key]
+                            if (useEllipsis && typeof v === 'string') {
+                              const s = v.toString()
+                              return s.length > ellipsisChars ? `${s.slice(0, ellipsisChars)}...` : s
+                            }
+                            return v
+                          })()
+                      return (
+                        <td key={column.key} className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : medium ? 'px-4 py-2' : 'px-6 py-4'} text-sm text-gray-800 border-r border-gray-100/50 last:border-r-0 ${rowClass}`}>
+                          <div className={cellClass} title={typeof item[column.key] === 'string' ? item[column.key] : ''}>{displayContent}</div>
+                        </td>
+                      )
+                    })}
                     {showActions && (
-                      <td className="px-6 py-4 text-right border-r border-gray-100/50 last:border-r-0">
-                        <div className="action-buttons">
+                      <td className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : 'px-6 py-4'} text-center border-r border-gray-100/50 last:border-r-0 ${rowColorBy ? (rowColorMap[item[rowColorBy]] || '') : ''}`}>
+                        <div className="flex items-center justify-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => (onView ? onView(item) : handleEdit(item))}
+                            className={`text-gray-700 hover:text-gray-900 transition-all duration-300 transform hover:scale-110 group-hover:bg-gray-50/50 ${ultraCompact ? 'p-1' : compact ? 'p-1' : 'p-2'} rounded-lg`}
+                            title="查看"
+                          >
+                            <Eye size={ultraCompact ? 14 : compact ? 16 : 18} />
+                          </button>
                           <button
                             onClick={() => handleEdit(item)}
-                            className="text-blue-600 hover:text-blue-800 transition-all duration-300 transform hover:scale-110 group-hover:bg-blue-50/50 p-2 rounded-lg"
+                            className={`text-blue-600 hover:text-blue-800 transition-all duration-300 transform hover:scale-110 group-hover:bg-blue-50/50 ${ultraCompact ? 'p-1' : compact ? 'p-1' : 'p-2'} rounded-lg`}
                             title="编辑"
                           >
-                            <Edit size={18} />
+                            <Edit size={ultraCompact ? 14 : compact ? 16 : 18} />
                           </button>
                           <button
                             onClick={() => handleCopy(item)}
-                            className="text-green-600 hover:text-green-800 transition-all duration-300 transform hover:scale-110 group-hover:bg-green-50/50 p-2 rounded-lg"
+                            className={`text-green-600 hover:text-green-800 transition-all duration-300 transform hover:scale-110 group-hover:bg-green-50/50 ${ultraCompact ? 'p-1' : compact ? 'p-1' : 'p-2'} rounded-lg`}
                             title="复制"
                           >
-                            <Copy size={18} />
+                            <Copy size={ultraCompact ? 14 : compact ? 16 : 18} />
                           </button>
                           <button
                             onClick={() => handleDelete(item)}
-                            className="text-red-600 hover:text-red-800 transition-all duration-300 transform hover:scale-110 group-hover:bg-red-50/50 p-2 rounded-lg"
+                            className={`text-red-600 hover:text-red-800 transition-all duration-300 transform hover:scale-110 group-hover:bg-red-50/50 ${ultraCompact ? 'p-1' : compact ? 'p-1' : 'p-2'} rounded-lg`}
                             title="删除"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 size={ultraCompact ? 14 : compact ? 16 : 18} />
                           </button>
                         </div>
                       </td>
                     )}
                   </tr>
-                ))}
+                ))
+                })()}
               </tbody>
             </table>
           </div>
+          {pagination && (
+            <Pagination
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              total={pagination.total ?? data.length}
+              onChange={pagination.onChange}
+              pageSizeOptions={pagination.pageSizeOptions}
+            />
+          )}
         </div>
       )}
       

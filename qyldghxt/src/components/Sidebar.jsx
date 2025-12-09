@@ -18,9 +18,11 @@ import {
   ChevronDown,
   ChevronRight,
   Menu,
-  Info
+  Info,
+  GitBranch
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { appVersion } from '../version'
 
 const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
   const { user } = useAuth()
@@ -29,23 +31,24 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
 
   const menuItems = [
     { id: 'dashboard', icon: Home, label: '首页概览', path: '/dashboard' },
-    { id: 'department-targets', icon: Target, label: '部门目标分解', path: '/department-targets' },
-    { id: 'annual-planning', icon: Calendar, label: '年度规划表', path: '/annual-planning' },
-    { id: 'annual-planning-chart', icon: BarChart3, label: '年度规划图表', path: '/annual-planning-chart' },
-    { id: 'annual-work-plan', icon: FileText, label: '年度工作规划', path: '/annual-work-plan' },
-    { id: 'major-events', icon: AlertTriangle, label: '大事件提炼', path: '/major-events' },
-    { id: 'monthly-progress', icon: TrendingUp, label: '月度推进计划', path: '/monthly-progress' },
-    { id: 'action-plans', icon: CheckSquare, label: '5W2H行动计划', path: '/action-plans' },
-    { id: 'data-analysis', icon: BarChart, label: '数据分析', path: '/data-analysis' },
+    { id: 'department-targets', icon: Target, label: '部门目标分解', path: '/department-targets', perm: '数据查看' },
+    { id: 'annual-planning', icon: Calendar, label: '年度规划表', path: '/annual-planning', perm: '数据查看' },
+    { id: 'annual-planning-chart', icon: BarChart3, label: '年度规划图表', path: '/annual-planning-chart', perm: '数据查看' },
+    { id: 'annual-work-plan', icon: FileText, label: '年度工作规划', path: '/annual-work-plan', perm: '数据查看' },
+    { id: 'major-events', icon: AlertTriangle, label: '大事件提炼', path: '/major-events', perm: '数据查看' },
+    { id: 'monthly-progress', icon: TrendingUp, label: '月度推进计划', path: '/monthly-progress', perm: '数据查看' },
+    { id: 'action-plans', icon: CheckSquare, label: '5W2H行动计划', path: '/action-plans', perm: '数据查看' },
+    { id: 'data-analysis', icon: BarChart, label: '数据分析', path: '/data-analysis', perm: '数据查看' },
   ]
 
   const systemMenuItems = [
-    { id: 'company-info', icon: Info, label: '公司信息', path: '/system/company-info' },
-    { id: 'departments', icon: Building2, label: '部门管理', path: '/system/departments' },
-    { id: 'employees', icon: Users, label: '员工管理', path: '/system/employees' },
-    { id: 'users', icon: Shield, label: '用户权限', path: '/system/users' },
-    { id: 'templates', icon: FileText, label: '模板设置', path: '/system/templates' },
-    { id: 'settings', icon: Settings, label: '系统设置', path: '/system/settings' },
+    { id: 'company-info', icon: Info, label: '公司信息', path: '/system/company-info', perm: '系统管理' },
+    { id: 'departments', icon: Building2, label: '部门管理', path: '/system/departments', perm: '系统管理' },
+    { id: 'employees', icon: Users, label: '员工管理', path: '/system/employees', perm: '系统管理' },
+    { id: 'org-structure', icon: GitBranch, label: '组织架构', path: '/system/org-structure', perm: '系统管理' },
+    { id: 'users', icon: Shield, label: '用户权限', path: '/system/users', perm: '用户管理' },
+    { id: 'templates', icon: FileText, label: '模板设置', path: '/system/templates', perm: '系统管理' },
+    { id: 'settings', icon: Settings, label: '系统设置', path: '/system/settings', perm: '系统管理' },
   ]
 
   if (!user) {
@@ -64,7 +67,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
           </button>
         </div>
         <nav className="flex-1 mt-4 px-2 overflow-y-auto">
-          {menuItems.map((item) => (
+          {menuItems.filter(m => !m.perm || (user && (user.permissions?.includes('admin') || user.permissions?.includes(m.perm)))).map((item) => (
             <Link
               key={item.id}
               to={item.path}
@@ -100,7 +103,10 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
       <div className="p-4 border-b border-slate-200/50 bg-gradient-to-r from-blue-500/5 to-purple-500/5">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">企业年度规划系统</h1>
+            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center">
+              企业年度规划系统
+              <span className="ml-2 text-xs text-slate-700 bg-slate-100 border border-slate-200 rounded px-2 py-0.5">v{appVersion}</span>
+            </h1>
             <p className="text-xs text-slate-600 mt-1 font-medium">泉州太禾服饰有限公司</p>
           </div>
           <div></div>
@@ -143,12 +149,12 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
             {systemMenuOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
           
-          {systemMenuOpen && (
-            <div className="ml-4 mt-2 space-y-2">
-              {systemMenuItems.map((item) => (
-                <Link
-                  key={item.id}
-                  to={item.path}
+              {systemMenuOpen && (
+                <div className="ml-4 mt-2 space-y-2">
+                  {systemMenuItems.filter(m => !m.perm || (user && (user.permissions?.includes('admin') || user.permissions?.includes(m.perm)))).map((item) => (
+                    <Link
+                      key={item.id}
+                      to={item.path}
                   className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-all duration-300 hover:translate-x-1 ${
                     location.pathname === item.path
                       ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md shadow-purple-500/25' 
@@ -170,9 +176,9 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
         </div>
       </nav>
       
+      {/* 系统状态 */}
       <div className="p-4 border-t border-slate-200/50 bg-gradient-to-r from-blue-500/5 to-purple-500/5">
         <div className="text-sm font-semibold text-green-700">系统运行正常</div>
-        <div className="mt-1 text-xs text-slate-700">泉州太禾服饰有限公司 · v1.0.0</div>
       </div>
     </div>
   )

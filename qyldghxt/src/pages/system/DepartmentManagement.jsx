@@ -1,14 +1,35 @@
 import React, { useState, useEffect } from 'react'
 import TableManager from '../../components/TableManager'
 import { useData } from '../../contexts/DataContext'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
+import { RefreshCw } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 
 const DepartmentManagement = () => {
-  const { getDepartments, addDepartment, updateDepartment, deleteDepartment } = useData()
+  const { getDepartments, addDepartment, updateDepartment, deleteDepartment, syncDepartmentsFromDingTalk, getIntegrationStatus, getSystemSettings } = useData()
   const [departments, setDepartments] = useState([])
   const [editingId, setEditingId] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [dingtalkEnabled, setDingtalkEnabled] = useState(true)
 
   useEffect(() => {
     loadDepartments()
+    ;(async () => {
+      const r = await getIntegrationStatus()
+      if (r.success) {
+        let enabled = Boolean(r.data?.dingtalkConfigured)
+        if (!enabled) {
+          const s = await getSystemSettings()
+          if (s.success && Array.isArray(s.data)) {
+            const rec = s.data.find(it => it.key === 'integration')
+            const v = rec?.value || {}
+            const hasKeys = Boolean(String(v.dingtalkAppKey || '').trim()) && Boolean(String(v.dingtalkAppSecret || '').trim())
+            enabled = Boolean(v.dingtalkEnabled) && hasKeys
+          }
+        }
+        setDingtalkEnabled(enabled)
+      }
+    })()
   }, [])
 
   const loadDepartments = async () => {
@@ -64,6 +85,19 @@ const DepartmentManagement = () => {
     handleAdd(newData)
   }
 
+  const handleSyncDingTalk = async () => {
+    if (syncing) return
+    setSyncing(true)
+    const result = await syncDepartmentsFromDingTalk({ root_dept_id: 1 })
+    if (result.success) {
+      toast.success(`已同步${result.data?.count ?? 0}个部门`)
+      await loadDepartments()
+    } else {
+      toast.error(result.error || '同步失败')
+    }
+    setSyncing(false)
+  }
+
   const columns = [
     { key: 'name', label: '部门名称', required: true },
     { key: 'code', label: '部门编码', required: true },
@@ -91,10 +125,7 @@ const DepartmentManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">部门管理</h1>
-        <p className="text-gray-600">管理企业组织架构和部门信息</p>
-      </div>
+      <PageHeaderBanner title="部门管理" subTitle="部门管理的年度工作落地规划" />
 
       <TableManager
         title="部门列表"
@@ -106,6 +137,16 @@ const DepartmentManagement = () => {
         onCopy={handleCopy}
         editingId={editingId}
         onEditingChange={setEditingId}
+        headerActionsLeft={(
+          <button
+            onClick={handleSyncDingTalk}
+            disabled={syncing || !dingtalkEnabled}
+            className={`px-3 py-2 ${(syncing || !dingtalkEnabled) ? 'bg-gray-300' : 'bg-gradient-to-r from-green-500 to-emerald-600'} text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold`}
+          >
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            <span>{syncing ? '同步中...' : (dingtalkEnabled ? '同步钉钉部门' : '未配置钉钉')}</span>
+          </button>
+        )}
       />
     </div>
   )

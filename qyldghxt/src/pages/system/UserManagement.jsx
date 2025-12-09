@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Plus, Edit, Trash2, Save, X, Shield, Eye, EyeOff } from 'lucide-react'
 import { useData } from '../../contexts/DataContext'
 import DeleteConfirmDialog from '../../components/DeleteConfirmDialog'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 
 const UserManagement = () => {
   const { getUsers, addUser, updateUser, deleteUser } = useData()
@@ -16,6 +17,17 @@ const UserManagement = () => {
     role: '',
     status: '启用'
   })
+
+  const formatDate = (s) => {
+    if (!s) return '从未登录'
+    try {
+      const d = new Date(s)
+      if (isNaN(d.getTime())) return s
+      return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    } catch (_) {
+      return s
+    }
+  }
 
   // 加载用户数据
   useEffect(() => {
@@ -124,28 +136,26 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-xl shadow-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg">
-              <Shield size={32} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">用户管理</h1>
-              <p className="text-gray-600">管理系统用户账号和权限设置</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center space-x-2"
-          >
-            <Plus size={18} />
-            <span>新增用户</span>
-          </button>
-        </div>
+      <PageHeaderBanner title="用户权限" subTitle="用户权限的年度工作落地规划" right={(
+        <button
+          onClick={() => setIsEditing(!isEditing)}
+          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center space-x-2"
+        >
+          <Plus size={18} />
+          <span>新增用户</span>
+        </button>
+      )} />
 
-        {isEditing && (
-          <form onSubmit={handleSubmit} className="mb-6 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-gray-200 shadow-lg">
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="p-5 border-b bg-gradient-to-r from-blue-500 to-purple-600 text-white flex items-center justify-between">
+              <div className="font-semibold text-lg">{editingId ? '编辑用户' : '新增用户'}</div>
+              <button onClick={resetForm} className="text-white/80 hover:text-white" title="关闭">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-2">
@@ -212,22 +222,17 @@ const UserManagement = () => {
                 </select>
               </div>
             </div>
-            <div className="flex items-center space-x-3 mt-6">
-              <button type="submit" className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center space-x-2">
-                <Save size={18} />
-                <span>{editingId ? '更新' : '保存'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={resetForm}
-                className="px-6 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all duration-200 transform hover:scale-105 shadow-lg flex items-center space-x-2"
-              >
-                <X size={18} />
-                <span>取消</span>
-              </button>
-            </div>
-          </form>
-        )}
+              <div className="flex justify-end space-x-3 mt-6">
+                <button type="button" onClick={resetForm} className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
+                <button type="submit" className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg flex items-center space-x-2">
+                  <Save size={18} />
+                  <span>{editingId ? '更新' : '保存'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
         <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-lg">
           <table className="min-w-full bg-white">
@@ -259,7 +264,7 @@ const UserManagement = () => {
                       {user.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">{user.lastLogin}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">{formatDate(user.lastLogin)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-3">
                       <button
@@ -291,7 +296,6 @@ const UserManagement = () => {
             <div><strong>普通用户：</strong>只能查看分配给自己的数据</div>
           </div>
         </div>
-      </div>
 
       <DeleteConfirmDialog
         isOpen={deleteDialog.isOpen}
@@ -299,7 +303,7 @@ const UserManagement = () => {
         itemType="用户"
         onConfirm={confirmDelete}
         onCancel={cancelDelete}
-      />
+        />
     </div>
   )
 }

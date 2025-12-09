@@ -1,41 +1,53 @@
 import React, { useEffect, useState } from 'react'
 import { Bell, ArrowLeft, Mail, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useData } from '../../contexts/DataContext'
+import { formatDateTime } from '../../utils/locale.js'
 
 const Notifications = () => {
   const navigate = useNavigate()
+  const { getNotifications } = useData()
   const [notifications, setNotifications] = useState([])
 
   useEffect(() => {
-    try {
-      const cached = JSON.parse(localStorage.getItem('notifications') || '[]')
-      if (Array.isArray(cached) && cached.length) {
-        setNotifications(cached)
-      } else {
-        const initial = [
-          { id: 1, type: 'info', title: '系统维护通知', message: '系统将于今晚22:00-24:00进行维护升级', time: new Date().toLocaleString('zh-CN'), read: false },
-          { id: 2, type: 'warning', title: '目标截止提醒', message: '您的年度目标还有3天即将截止', time: new Date().toLocaleString('zh-CN'), read: true },
-          { id: 3, type: 'success', title: '任务完成通知', message: '您负责的月度计划已全部完成', time: new Date().toLocaleString('zh-CN'), read: true }
-        ]
-        setNotifications(initial)
-        localStorage.setItem('notifications', JSON.stringify(initial))
+    const load = async () => {
+      try {
+        const res = await getNotifications()
+        if (res.success && Array.isArray(res.data)) {
+          const normalized = res.data.map(n => ({
+            id: n.id,
+            type: n.type || 'info',
+            title: n.title || '系统公告',
+            message: n.message || n.content || '',
+            time: n.published_at || n.release_time || formatDateTime(new Date()),
+            read: n.read ?? false
+          }))
+          setNotifications(normalized)
+          saveAndNotify(normalized)
+        } else {
+          const cached = JSON.parse(localStorage.getItem('notifications') || '[]')
+          setNotifications(Array.isArray(cached) ? cached : [])
+        }
+      } catch (e) {
+        const cached = JSON.parse(localStorage.getItem('notifications') || '[]')
+        setNotifications(Array.isArray(cached) ? cached : [])
       }
-    } catch {
-      setNotifications([])
     }
+    load()
   }, [])
-
-  useEffect(() => {
-    if (notifications && notifications.length) {
-      const allRead = notifications.map(n => ({ ...n, read: true }))
-      saveAndNotify(allRead)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notifications.length])
 
   const saveAndNotify = (list) => {
     setNotifications(list)
-    localStorage.setItem('notifications', JSON.stringify(list))
+    // Before saving, ensure the list is clean and serializable to prevent circular structure errors.
+    const serializableList = list.map(item => ({
+      id: item.id,
+      type: item.type,
+      title: item.title,
+      message: item.message,
+      time: item.time,
+      read: item.read,
+    }));
+    localStorage.setItem('notifications', JSON.stringify(serializableList))
     window.dispatchEvent(new Event('notificationsUpdated'))
   }
 

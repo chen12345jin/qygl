@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react'
-import { Save, Building2 } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { Save, Building2, Maximize2, Minimize2 } from 'lucide-react'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { useData } from '../../contexts/DataContext'
 import InlineAlert from '../../components/InlineAlert'
+import DeleteConfirmDialog from '../../components/DeleteConfirmDialog'
 import toast from 'react-hot-toast'
 
 const CompanyInfo = () => {
+  const containerRef = useRef(null)
   const [formData, setFormData] = useState({
     name: '',
     legalPerson: '',
@@ -14,10 +17,13 @@ const CompanyInfo = () => {
     website: '',
     establishDate: ''
   })
+  const [originalData, setOriginalData] = useState(null)
+  const [cancelDialog, setCancelDialog] = useState({ isOpen: false })
   const [isEditing, setIsEditing] = useState(false)
   const [errors, setErrors] = useState({})
   const [alert, setAlert] = useState({ show: false, message: '', type: 'info' })
   const [alertTimeout, setAlertTimeout] = useState(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // 清理定时器
   useEffect(() => {
@@ -28,13 +34,23 @@ const CompanyInfo = () => {
     }
   }, [alertTimeout])
 
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handler)
+    return () => {
+      document.removeEventListener('fullscreenchange', handler)
+    }
+  }, [])
+
   const { getCompanyInfo, updateCompanyInfo } = useData()
 
   useEffect(() => {
     (async () => {
       const result = await getCompanyInfo()
       if (result.success) {
-        setFormData({
+        const info = {
           name: result.data?.name || '',
           legalPerson: result.data?.legalPerson || '',
           address: result.data?.address || '',
@@ -42,7 +58,9 @@ const CompanyInfo = () => {
           email: result.data?.email || '',
           website: result.data?.website || '',
           establishDate: result.data?.establishDate || ''
-        })
+        }
+        setFormData(info)
+        setOriginalData(info)
       }
     })()
   }, [])
@@ -110,44 +128,45 @@ const CompanyInfo = () => {
     setFormData({ ...formData, [field]: value })
   }
 
+  const toggleFullscreen = async () => {
+    if (!isFullscreen) {
+      try {
+        await containerRef.current?.requestFullscreen()
+        setIsFullscreen(true)
+      } catch {}
+    } else {
+      try {
+        await document.exitFullscreen()
+        setIsFullscreen(false)
+      } catch {}
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* 标题区域 */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-12 -translate-x-12"></div>
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-gradient-to-r from-white/20 to-white/30 rounded-lg shadow-lg">
-                  <Building2 size={24} className="text-white" />
-                </div>
-                <h1 className="text-3xl font-bold text-white bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
-                  企业信息管理
-                </h1>
-              </div>
+    <div ref={containerRef} className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6 flex flex-col">
+      <div className="flex-1 w-full">
+        <PageHeaderBanner
+          title="公司信息"
+          subTitle="公司信息的年度工作落地规划"
+          right={(
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={toggleFullscreen}
+                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-white/20 to-white/30 hover:from-white/30 hover:to-white/40 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+              >
+                {isFullscreen ? (<><Minimize2 size={18} /><span>退出全屏</span></>) : (<><Maximize2 size={18} /><span>全屏</span></>)}
+              </button>
               <button
                 onClick={() => setIsEditing(!isEditing)}
                 className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-white/20 to-white/30 hover:from-white/30 hover:to-white/40 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
               >
-                {isEditing ? (
-                  <>
-                    <span>取消编辑</span>
-                  </>
-                ) : (
-                  <>
-                    <span>编辑信息</span>
-                  </>
-                )}
+                {isEditing ? (<span>取消编辑</span>) : (<span>编辑信息</span>)}
               </button>
             </div>
-            <p className="text-blue-100 text-lg">管理企业基本信息和联系信息</p>
-          </div>
-        </div>
+          )}
+        />
 
-        {/* 内容区域 */}
-        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg border border-white/50 p-6">
+        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg border border-white/50 p-6 h-full">
           <form onSubmit={handleSubmit} className="space-y-6">
             {alert.show && (
               <InlineAlert
@@ -157,7 +176,7 @@ const CompanyInfo = () => {
               />
             )}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 企业名称 <span className="text-red-500">*</span>
@@ -288,10 +307,7 @@ const CompanyInfo = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setIsEditing(false)
-                  setFormData(companyInfo)
-                }}
+                onClick={() => setCancelDialog({ isOpen: true })}
                 className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
               >
                 取消
@@ -299,6 +315,16 @@ const CompanyInfo = () => {
             </div>
           )}
         </form>
+
+        <DeleteConfirmDialog
+          isOpen={cancelDialog.isOpen}
+          onClose={() => setCancelDialog({ isOpen: false })}
+          onConfirm={() => { setIsEditing(false); if (originalData) setFormData(originalData) }}
+          title="确认取消编辑"
+          message="取消编辑将丢弃未保存的更改，是否继续？"
+          confirmText="确认取消"
+          cancelText="继续编辑"
+        />
 
         {!isEditing && (
           <div className="mt-8 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl shadow-lg border border-white/50">

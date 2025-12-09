@@ -3,10 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Building2, Lock, User, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { appVersion } from '../version'
 
 const Login = () => {
   const navigate = useNavigate()
   const { login, isAuthenticated } = useAuth()
+  useEffect(() => {
+    const disable = typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.DISABLE_LOGIN === true
+    if (disable) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [navigate])
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -21,6 +28,15 @@ const Login = () => {
       navigate('/dashboard', { replace: true })
     }
   }, [isAuthenticated, navigate])
+
+  useEffect(() => {
+    if (import.meta.env.PROD) {
+      const server = (localStorage.getItem('SERVER_URL') || '').trim()
+      if (!server) {
+        navigate('/server-config', { replace: true })
+      }
+    }
+  }, [navigate])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -68,8 +84,9 @@ const Login = () => {
           <div className="mx-auto h-24 w-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/25">
             <Building2 size={48} className="text-white" />
           </div>
-          <h2 className="text-4xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent mb-2">
+          <h2 className="text-4xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent mb-2 flex items-center justify-center">
             企业年度规划系统
+            <span className="ml-2 text-xs text-white/80 border border-white/20 rounded px-2 py-0.5">v{appVersion}</span>
           </h2>
           <p className="text-blue-200 font-medium">泉州太禾服饰有限公司</p>
         </div>
@@ -156,11 +173,18 @@ const Login = () => {
               </button>
             </div>
           </form>
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              className="text-blue-200 hover:text-white underline"
+              onClick={() => navigate('/server-config')}
+            >服务器配置</button>
+          </div>
         </div>
 
         {/* 版权信息 */}
         <div className="text-center text-sm text-blue-200/60">
-          © 2025 泉州太禾服饰有限公司 · Payment System v1.0.0
+          © 2025 泉州太禾服饰有限公司 · 企业年度规划系统 v{appVersion}
         </div>
       </div>
     </div>

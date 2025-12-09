@@ -4,7 +4,11 @@ import { useAuth } from '../contexts/AuthContext'
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth()
+  const disable = typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.DISABLE_LOGIN === true
 
+  if (disable) {
+    return children
+  }
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">

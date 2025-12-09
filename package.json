@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "javascript-obfuscator": "^4.2.1",
+    "rollup-plugin-obfuscator": "^1.1.0",
+    "wait-on": "^9.0.3"
+  }
+}

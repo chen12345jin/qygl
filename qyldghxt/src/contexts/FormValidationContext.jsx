@@ -8,7 +8,7 @@ const REQUIRED_FIELDS_CONFIG = {
   dashboard: ['year', 'department', 'status'],
   
   // 2. 部门目标分解
-  departmentTargets: ['department', 'targetType', 'targetValue', 'deadline', 'responsible'],
+  departmentTargets: ['department', 'targetLevel', 'targetType', 'targetName', 'targetValue', 'unit', 'quarter', 'month', 'currentValue', 'responsible'],
   
   // 3. 年度规划表
   annualPlanning: ['planType', 'planName', 'startDate', 'endDate', 'department', 'responsible'],

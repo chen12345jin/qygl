@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Edit, Trash2, Save, X, FileText, Download, Upload } from 'lucide-react'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { toast } from 'react-hot-toast'
 import { useData } from '../../contexts/DataContext'
 import DeleteConfirmDialog from '../../components/DeleteConfirmDialog'
@@ -257,28 +258,15 @@ const TemplateSettings = () => {
 
   return (
     <div className="space-y-6">
-      {/* 标题区域 */}
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-xl shadow-lg border border-white/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg">
-              <FileText size={32} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">模板设置</h1>
-              <p className="text-gray-600">管理系统模板配置和字段定义</p>
-            </div>
-          </div>
+      <PageHeaderBanner
+        title="模板设置"
+        subTitle="模板设置的年度工作落地规划"
+        right={(
           <div className="flex space-x-3">
             <label className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 cursor-pointer">
               <Upload size={18} />
               <span>导入模板</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                className="hidden"
-              />
+              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
             </label>
             <button
               onClick={() => setShowForm(true)}
@@ -288,96 +276,114 @@ const TemplateSettings = () => {
               <span>新建模板</span>
             </button>
           </div>
-        </div>
-      </div>
+        )}
+      />
 
-      {/* 模板表单 */}
+      {/* 模板表单弹窗 */}
       {showForm && (
-        <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg border border-white/50 p-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              {editingTemplate ? '编辑模板' : '新建模板'}
-            </h2>
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-2">
-                  模板名称 *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-2">
-                  模板类型 *
-                </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  required
-                >
-                  {templateTypes.map(type => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4">
+            {/* 头部 */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                {editingTemplate ? '编辑模板' : '新建模板'}
+              </h2>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+                aria-label="关闭"
+              >
+                <X size={22} />
+              </button>
             </div>
-            
-            <div>
-              <label className="block text-sm font-semibold text-gray-800 mb-2">
-                模板描述
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                rows="3"
-              />
-            </div>
-
-            {/* 显示字段预览 */}
-            {formData.type && fieldMap[formData.type] && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-3">
-                  模板字段预览
-                </label>
-                <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-xl border border-white/50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {fieldMap[formData.type].map((field, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
-                        <span className="text-sm font-semibold text-gray-800">{field.label}</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">{field.type}</span>
-                          {field.required && (
-                            <span className="text-xs text-red-500 px-2 py-1 bg-red-100 rounded">必填</span>
-                          )}
-                        </div>
-                      </div>
+            {/* 内容 */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                    模板名称
+                    <span className="ml-1 text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                    模板类型
+                    <span className="ml-1 text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({...formData, type: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    required
+                  >
+                    {templateTypes.map(type => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
               </div>
-            )}
 
-            <div className="flex items-center space-x-3 pt-6 border-t border-gray-200">
-              <button type="submit" className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
-                <Save size={18} />
-                <span>{editingTemplate ? '更新' : '创建'}</span>
-              </button>
-              <button type="button" onClick={resetForm} className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300">
-                取消
-              </button>
-            </div>
-          </form>
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">模板描述</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  rows="3"
+                />
+              </div>
+
+              {formData.type && fieldMap[formData.type] && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-3">模板字段预览</label>
+                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-xl border border-white/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {fieldMap[formData.type].map((field, index) => (
+                        <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                          <span className="text-sm font-semibold text-gray-800">{field.label}</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">{field.type}</span>
+                            {field.required && (
+                              <span className="text-xs text-red-500 px-2 py-1 bg-red-100 rounded">必填</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end items-center space-x-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                >
+                  <span className="inline-flex items-center space-x-2">
+                    <Save size={18} />
+                    <span>{editingTemplate ? '更新' : '创建'}</span>
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

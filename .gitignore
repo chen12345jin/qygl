@@ -6,3 +6,12 @@ build/
 *.local
 .DS_Store
 Thumbs.db
+apache-maven-*/
+.vscode/
+.idea/
+coverage/
+*.map
+**/release/
+**/win-unpacked/
+**/*.blockmap
+**/*.asar
