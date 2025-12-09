@@ -1,0 +1,26 @@
+{
+  "appId": "com.qygl.server",
+  "productName": "企业年度规划系统-服务端",
+  "electronVersion": "32.2.0",
+  "directories": { "output": "D:/qygl/qyldghxt/azb/1.0.2/release/server-v7-new" },
+  "files": [ "electron/server-main.js" ],
+  "extraMetadata": { "main": "electron/server-main.js" },
+  "win": { "target": "nsis", "icon": "public/icon.ico" },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "runAfterFinish": false,
+    "createDesktopShortcut": false,
+    "createStartMenuShortcut": false,
+    "include": "build_resources/scripts/server-install.nsh"
+  },
+  "extraResources": [
+    { "from": "build_resources/daemon/", "to": "backend/daemon" },
+    { "from": "build_resources/desktop/", "to": "backend/desktop" },
+    { "from": "server/", "to": "backend", "filter": ["**/*", "!**/*.ts", "!test/"] },
+    { "from": "azb/1.0.2/release/server-source/node_modules", "to": "backend/node_modules" },
+    { "from": "server.js", "to": "backend/server.js" },
+    { "from": "azb/1.0.2/release/server-source/backend-service.exe", "to": "backend/backend-service.exe" },
+    { "from": "server/.env", "to": "backend/.env" }
+  ]
+}

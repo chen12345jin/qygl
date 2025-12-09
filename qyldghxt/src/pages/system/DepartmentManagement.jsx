@@ -6,7 +6,7 @@ import { RefreshCw } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
 const DepartmentManagement = () => {
-  const { getDepartments, addDepartment, updateDepartment, deleteDepartment, syncDepartmentsFromDingTalk, getIntegrationStatus } = useData()
+  const { getDepartments, addDepartment, updateDepartment, deleteDepartment, syncDepartmentsFromDingTalk, getIntegrationStatus, getSystemSettings } = useData()
   const [departments, setDepartments] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [syncing, setSyncing] = useState(false)
@@ -17,7 +17,17 @@ const DepartmentManagement = () => {
     ;(async () => {
       const r = await getIntegrationStatus()
       if (r.success) {
-        setDingtalkEnabled(Boolean(r.data?.dingtalkConfigured))
+        let enabled = Boolean(r.data?.dingtalkConfigured)
+        if (!enabled) {
+          const s = await getSystemSettings()
+          if (s.success && Array.isArray(s.data)) {
+            const rec = s.data.find(it => it.key === 'integration')
+            const v = rec?.value || {}
+            const hasKeys = Boolean(String(v.dingtalkAppKey || '').trim()) && Boolean(String(v.dingtalkAppSecret || '').trim())
+            enabled = Boolean(v.dingtalkEnabled) && hasKeys
+          }
+        }
+        setDingtalkEnabled(enabled)
       }
     })()
   }, [])

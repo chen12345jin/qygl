@@ -8,6 +8,12 @@ import { appVersion } from '../version'
 const Login = () => {
   const navigate = useNavigate()
   const { login, isAuthenticated } = useAuth()
+  useEffect(() => {
+    const disable = typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.DISABLE_LOGIN === true
+    if (disable) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [navigate])
   const [formData, setFormData] = useState({
     username: '',
     password: ''

@@ -19,7 +19,18 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      const newSocket = io(window.location.origin, {
+      let serverBase = 'http://localhost:5004'
+      // 优先从 localStorage 读取，其次是 window.SERVER_CONFIG，最后是默认值
+      const fromStorage = localStorage.getItem('SERVER_URL')
+      const fromWindow = (typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.BASE_URL)
+      
+      if (fromStorage && fromStorage.trim()) {
+        serverBase = fromStorage.trim()
+      } else if (fromWindow && String(fromWindow).trim()) {
+        serverBase = String(fromWindow).trim()
+      }
+
+      const newSocket = io(import.meta.env?.DEV ? '/' : serverBase, {
         path: '/socket.io',
         transports: ['polling', 'websocket'],
         reconnection: true,

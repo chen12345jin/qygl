@@ -37,7 +37,10 @@ export const DataProvider = ({ children }) => {
           // 自动跳转到登录页面
           localStorage.removeItem('token')
           localStorage.removeItem('currentUser')
-          window.location.href = '/login'
+          const disable = typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.DISABLE_LOGIN === true
+          if (!disable && typeof window !== 'undefined') {
+            window.location.hash = '#/login'
+          }
         } else if (error.response.status === 404) {
           message = '请求的资源不存在'
         } else if (error.response.data?.error) {
@@ -61,6 +64,14 @@ export const DataProvider = ({ children }) => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const ensureDeleteOk = (response) => {
+    const d = response && response.data
+    if (!d) return true
+    const ok = (d.success === true) || (d.code === 200) || (d.status === 'ok')
+    if (!ok) throw new Error(d.msg || d.error || '删除失败')
+    return true
   }
 
   // 部门管理
@@ -101,7 +112,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteDepartment = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/departments/${id}`)
+      const response = await api.delete(`/departments/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -144,7 +156,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteEmployee = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/employees/${id}`)
+      const response = await api.delete(`/employees/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -173,7 +186,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteUser = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/users/${id}`)
+      const response = await api.delete(`/users/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -202,7 +216,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteDepartmentTarget = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/department-targets/${id}`)
+      const response = await api.delete(`/department-targets/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -233,7 +248,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteAnnualWorkPlan = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/annual-work-plans/${id}`)
+      const response = await api.delete(`/annual-work-plans/${id}`)
+      ensureDeleteOk(response)
       try { emitDataUpdate('annualWorkPlans', { action: 'delete' }) } catch {}
       return true
     })
@@ -280,7 +296,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteMajorEvent = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/major-events/${id}`)
+      const response = await api.delete(`/major-events/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -309,7 +326,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteMonthlyProgress = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/monthly-progress/${id}`)
+      const response = await api.delete(`/monthly-progress/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -340,7 +358,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteActionPlan = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/action-plans/${id}`)
+      const response = await api.delete(`/action-plans/${id}`)
+      ensureDeleteOk(response)
       try { emitDataUpdate('actionPlans', { action: 'delete' }) } catch {}
       return true
     })
@@ -370,7 +389,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteTemplate = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/templates/${id}`)
+      const response = await api.delete(`/templates/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -399,7 +419,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteTargetType = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/target-types/${id}`)
+      const response = await api.delete(`/target-types/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -428,7 +449,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteSystemSetting = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/system-settings/${id}`)
+      const response = await api.delete(`/system-settings/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -457,7 +479,8 @@ export const DataProvider = ({ children }) => {
 
   const deleteNotification = async (id) => {
     return handleApiCall(async () => {
-      await api.delete(`/notifications/${id}`)
+      const response = await api.delete(`/notifications/${id}`)
+      ensureDeleteOk(response)
       return true
     })
   }
@@ -492,6 +515,13 @@ export const DataProvider = ({ children }) => {
   const getIntegrationStatus = async () => {
     return handleApiCall(async () => {
       const response = await api.get('/integration/status')
+      return response.data
+    }, false)
+  }
+
+  const checkBackendHealth = async () => {
+    return handleApiCall(async () => {
+      const response = await api.get('/health')
       return response.data
     }, false)
   }
@@ -558,7 +588,8 @@ export const DataProvider = ({ children }) => {
     getCompanyInfo,
     updateCompanyInfo
     ,
-    getIntegrationStatus
+    getIntegrationStatus,
+    checkBackendHealth
   }
 
   return (

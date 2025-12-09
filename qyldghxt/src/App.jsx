@@ -1,7 +1,8 @@
 // 应用主组件
 // 包含路由和全局布局
-import React, { Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import React, { Suspense, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login'
 import Layout from './components/Layout'
@@ -81,6 +82,8 @@ class ErrorBoundary extends React.Component {
 }
 
 function App() {
+  const navigate = useNavigate()
+  
   return (
     <AuthProvider>
       <SocketProvider>

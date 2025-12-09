@@ -1,6 +1,7 @@
 import React from 'react'
 import { X, Download, FileText } from 'lucide-react'
 import { exportToPDF, printElement, printViaCanvas, printViaIframe } from '../utils/export'
+import { formatDateTime } from '../utils/locale.js'
 import toast from 'react-hot-toast'
 
 const PrintPreview = ({ 
@@ -71,7 +72,7 @@ const PrintPreview = ({
             <div className="text-center mb-8 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-4">
               <h1 className="text-2xl font-bold text-white mb-2">{title}</h1>
               <p className="text-white/80">
-                生成时间：{new Date().toLocaleString('zh-CN')}
+                生成时间：{formatDateTime(new Date())}
               </p>
             </div>
 

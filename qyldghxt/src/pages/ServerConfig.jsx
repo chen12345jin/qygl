@@ -10,24 +10,26 @@ const ServerConfig = () => {
 
   async function testConnection() {
     setStatus('testing')
+    const base = (ip || '').trim().replace(/\/+$/,'')
+    if (!base) {
+      setStatus('error')
+      toast.error('请输入服务器地址')
+      return
+    }
+    localStorage.setItem('SERVER_URL', base)
     try {
-      const base = (ip || '').trim().replace(/\/+$/,'')
-      if (!base) {
-        setStatus('error')
-        toast.error('请输入服务器地址')
-        return
-      }
       const url = `${base}/api/health`
       const res = await axios.get(url, { timeout: 8000 })
       if (res.data && String(res.data.status) === 'ok') {
-        localStorage.setItem('SERVER_URL', base)
         setStatus('success')
         toast.success('连接成功，配置已保存')
-        navigate('/login', { replace: true })
-        return
+        setTimeout(() => {
+          navigate('/login', { replace: true })
+        }, 1000)
+      } else {
+        setStatus('error')
+        toast.error('连接失败，请检查服务端是否可用')
       }
-      setStatus('error')
-      toast.error('连接失败，请检查服务端是否可用')
     } catch (_) {
       setStatus('error')
       toast.error('连接失败，请检查地址或防火墙设置')
@@ -63,4 +65,3 @@ const ServerConfig = () => {
 }
 
 export default ServerConfig
-

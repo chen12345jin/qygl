@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useSocket } from '../contexts/SocketContext'
 import { useNavigate } from 'react-router-dom'
+import { formatDate } from '../utils/locale.js'
 
 const Header = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth()
@@ -33,11 +34,11 @@ const Header = ({ onToggleSidebar }) => {
 
   React.useEffect(() => {
     try {
-      const s = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+      const s = formatDate(new Date(), { year: 'numeric', month: 'long', day: 'numeric' })
       setToday(s)
     } catch {
       const d = new Date()
-      setToday(`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`)
+      setToday(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
     }
   }, [])
 

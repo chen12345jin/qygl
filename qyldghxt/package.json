@@ -1,15 +1,21 @@
 {
   "name": "enterprise-annual-planning-system",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"vite\" \"wait-on tcp:3003 && electron .\"",
+    "electron:build": "vite build && electron-builder && node scripts/dist-arrange.js",
+    "build:client": "vite build && electron-builder --win --x64",
+    "build:server": "node scripts/build-server-pkg.js",
+    "build:server-release": "electron-builder --config electron-builder-server.json",
+    "release:azb": "npm run build:client && node scripts/obfuscate.js && node scripts/build-backend.js && node scripts/build-backend-installer.js"
   },
   "dependencies": {
-    "autoprefixer": "^10.4.17",
     "axios": "^1.13.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -44,9 +50,48 @@
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^4.0.0",
     "@vue/compiler-dom": "^3.5.16",
+    "electron-builder": "^24.13.3",
+    "javascript-obfuscator": "^4.2.1",
     "magic-string": "^0.30.17",
+    "pkg": "^5.8.1",
+    "rollup-plugin-obfuscator": "^1.1.0",
     "terser": "^5.44.1",
     "typescript": "^5.8.3",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "autoprefixer": "^10.4.17"
+  },
+  "build": {
+    "appId": "com.qygl.client",
+    "productName": "企业年度规划系统-客户端",
+    "directories": {
+      "output": "azb/1.0.2/release/client"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!server.js",
+      "!backend/**/*",
+      "!**/*.sql"
+    ],
+    "extraResources": [
+      {
+        "from": "public/config.js",
+        "to": "config.js"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico",
+      "artifactName": "Client-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "electronVersion": "32.2.0"
   }
 }

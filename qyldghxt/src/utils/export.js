@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import { formatDateTime, formatDate } from '../utils/locale.js'
 
 // 字段映射配置
 const fieldMaps = {
@@ -115,7 +116,7 @@ export const exportToExcel = (data, filename, sheetName = 'Sheet1', dataType = '
           if (key.includes('date') || key.includes('_at')) {
             if (value) {
               try {
-                value = new Date(value).toLocaleString('zh-CN')
+                value = formatDateTime(value)
               } catch (e) {
                 // 如果日期解析失败，保持原值
               }
@@ -144,7 +145,7 @@ export const exportToExcel = (data, filename, sheetName = 'Sheet1', dataType = '
           if (key.includes('date') || key.includes('_at')) {
             if (value) {
               try {
-                value = new Date(value).toLocaleString('zh-CN')
+                value = formatDateTime(value)
               } catch (e) {
                 // 如果日期解析失败，保持原值
               }
@@ -524,7 +525,7 @@ export const formatDataForExport = (data, type) => {
         if (key.includes('date') || key.includes('_at')) {
           if (value) {
             try {
-              value = new Date(value).toLocaleDateString('zh-CN')
+              value = formatDate(value)
             } catch (e) {
               // 保持原值
             }
@@ -551,7 +552,7 @@ export const formatDataForExport = (data, type) => {
         if (key.includes('date') || key.includes('_at')) {
           if (value) {
             try {
-              value = new Date(value).toLocaleDateString('zh-CN')
+              value = formatDate(value)
             } catch (e) {
               // 保持原值
             }

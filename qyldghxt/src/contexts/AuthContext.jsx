@@ -19,6 +19,13 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // 检查本地存储中的用户信息
     const checkAuth = () => {
+      const disable = typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.DISABLE_LOGIN === true
+      if (disable) {
+        setUser({ username: 'guest', permissions: ['admin'] })
+        setIsAuthenticated(true)
+        setLoading(false)
+        return
+      }
       try {
         const savedUser = sessionStorage.getItem('currentUser')
         if (savedUser && savedUser !== 'undefined' && savedUser !== 'null') {

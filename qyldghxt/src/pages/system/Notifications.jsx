@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Bell, ArrowLeft, Mail, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../../contexts/DataContext'
+import { formatDateTime } from '../../utils/locale.js'
 
 const Notifications = () => {
   const navigate = useNavigate()
@@ -18,7 +19,7 @@ const Notifications = () => {
             type: n.type || 'info',
             title: n.title || '系统公告',
             message: n.message || n.content || '',
-            time: n.published_at || n.release_time || new Date().toLocaleString('zh-CN'),
+            time: n.published_at || n.release_time || formatDateTime(new Date()),
             read: n.read ?? false
           }))
           setNotifications(normalized)

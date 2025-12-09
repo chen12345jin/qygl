@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import { api } from '../../utils/api'
 import { Save, Shield, Database, Bell, Wifi, Target, Plus, Edit, Trash2, X, RotateCcw, CheckCircle, Ban, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useData } from '../../contexts/DataContext'
 import DeleteConfirmDialog from '../../components/DeleteConfirmDialog'
 import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { useAuth } from '../../contexts/AuthContext'
+import { appVersion } from '../../version'
+import { formatDateTime, applyLocalePrefs } from '../../utils/locale.js'
 
 const SettingsButtons = ({ disabled, onSave, onReset, saving, resetting }) => (
   <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -38,7 +40,7 @@ const SystemSettings = () => {
   const [settings, setSettings] = useState({
     system: {
       systemName: '企业年度规划系统',
-      version: '1.0.0',
+      version: appVersion,
       language: 'zh-CN',
       timezone: 'Asia/Shanghai',
       autoBackup: true,
@@ -228,7 +230,7 @@ const SystemSettings = () => {
       const safeData = {
         system: {
           systemName: systemRec?.value?.systemName || '企业目标管理系统',
-          version: systemRec?.value?.version || '1.0.0',
+          version: appVersion,
           language: systemRec?.value?.language || 'zh-CN',
           timezone: systemRec?.value?.timezone || 'Asia/Shanghai',
           autoBackup: systemRec?.value?.autoBackup ?? true,
@@ -327,12 +329,7 @@ const SystemSettings = () => {
 
   const loadBackups = async () => {
     try {
-      let res
-      try {
-        res = await axios.get('/api/admin/backups')
-      } catch (_) {
-        res = await axios.get('http://localhost:5004/api/admin/backups')
-      }
+      const res = await api.get('/admin/backups')
       const items = res?.data?.items || []
       setBackups(items)
     } catch (e) {}
@@ -349,13 +346,17 @@ const SystemSettings = () => {
       const loadingId = toast.loading(activeTab === 'notification' ? '正在保存通知设置…' : '正在保存当前页面设置…')
       let result
       const id = settingIds[activeTab]
+      const payload = activeTab === 'system' ? { ...settings.system, version: appVersion } : settings[activeTab]
       if (id) {
-        result = await updateSystemSetting(id, { key: activeTab, value: settings[activeTab] }, true)
+        result = await updateSystemSetting(id, { key: activeTab, value: payload }, true)
       } else {
-        result = await addSystemSetting({ key: activeTab, value: settings[activeTab] }, true)
+        result = await addSystemSetting({ key: activeTab, value: payload }, true)
       }
       if (result.success) {
         toast.success(activeTab === 'notification' ? '通知设置已保存' : '当前页面设置已保存')
+        if (activeTab === 'system') {
+          applyLocalePrefs({ language: settings.system.language, timeZone: settings.system.timezone })
+        }
       } else {
         toast.error(activeTab === 'notification' ? '保存通知设置失败' : '保存当前页面设置失败')
       }
@@ -381,7 +382,7 @@ const SystemSettings = () => {
         const defaultSettings = {
           system: {
             systemName: '企业年度规划系统',
-            version: '1.0.0',
+            version: appVersion,
             language: 'zh-CN',
             timezone: 'Asia/Shanghai',
             autoBackup: true,
@@ -620,10 +621,10 @@ const SystemSettings = () => {
           </label>
           <input
             type="text"
-            value={settings.system.version}
-            onChange={(e) => updateSetting('system', 'version', e.target.value)}
-            className={`form-input ${!isAdmin ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-            readOnly={!isAdmin}
+            value={appVersion}
+            className={`form-input bg-gray-100 cursor-not-allowed`}
+            readOnly
+            disabled
           />
         </div>
         <div>
@@ -1088,7 +1089,7 @@ const SystemSettings = () => {
             disabled={!settings.integration.databaseBackup}
             onClick={async () => {
               try {
-                const res = await axios.post('/api/admin/backup')
+                const res = await api.post('/admin/backup')
                 toast.success(`备份成功：${res.data?.path || '已保存至backups目录'}`)
                 await loadBackups()
               } catch (err) {
@@ -1122,7 +1123,7 @@ const SystemSettings = () => {
                   <td className="px-3 py-2 text-gray-800">
                     <span className="inline-block max-w-[360px] truncate" title={b.name}>{formatBackupName(b.name)}</span>
                   </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{new Date(b.mtime).toLocaleString('zh-CN')}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDateTime(b.mtime)}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{(b.size/1024).toFixed(1)} KB</td>
                   <td className="px-3 py-2 text-center">
                     <a className="btn-primary" href={b.url} target="_blank" rel="noreferrer">下载</a>
@@ -1475,15 +1476,3 @@ const SystemSettings = () => {
 }
 
 export default SystemSettings
-  const loadBackups = async () => {
-    try {
-      let res
-      try {
-        res = await axios.get('/api/admin/backups')
-      } catch (_) {
-        res = await axios.get('http://localhost:5004/api/admin/backups')
-      }
-      const items = res?.data?.items || []
-      setBackups(items)
-    } catch (e) {}
-  }

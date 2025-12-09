@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 
 export default function PermissionRoute({ permission, children }) {
   const { isAuthenticated, checkPermission } = useAuth()
+  const disable = typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.DISABLE_LOGIN === true
+  if (disable) return children
   if (!isAuthenticated) return <Navigate to="/login" replace />
   const ok = !permission || checkPermission(permission)
   if (!ok) {

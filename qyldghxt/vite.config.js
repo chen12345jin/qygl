@@ -1,11 +1,26 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import obfuscator from 'rollup-plugin-obfuscator'
 
 export default defineConfig(({ mode }) => {
   const clientPort = Number(process.env.VITE_PORT || 3003)
   const apiPort = Number(process.env.VITE_API_PORT || 5004)
   return {
-    plugins: [react()],
+    base: './',
+    plugins: [
+      react(),
+      mode === 'production' && obfuscator({
+        global: true,
+        options: {
+          compact: true,
+          controlFlowFlattening: false,
+          deadCodeInjection: false,
+          stringArray: false,
+          debugProtection: false,
+          disableConsoleOutput: false
+        }
+      })
+    ],
     server: {
       port: clientPort,
       // 固定端口；若被占用则直接报错，不自动切换

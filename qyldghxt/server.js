@@ -24,7 +24,7 @@ const ENABLE_AUTH = String(process.env.ENABLE_AUTH || '').toLowerCase() === 'tru
 const JWT_SECRET = process.env.JWT_SECRET || 'development-only-secret-change-me'
 
 app.use(express.json({ limit: '50mb' }))
-app.use(cors())
+app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE'], credentials: true }))
 const uploadsDir = path.join(process.cwd(), 'uploads')
 try { fsSync.mkdirSync(uploadsDir, { recursive: true }) } catch (_) {}
 const diskStorage = multer.diskStorage({
@@ -59,6 +59,51 @@ if (ENABLE_AUTH) {
   })
 }
 
+// Config directory and DingTalk config persistence
+const CONFIG_DIR = path.join(process.cwd(), 'config')
+try { fsSync.mkdirSync(CONFIG_DIR, { recursive: true }) } catch (_) {}
+const DINGTALK_CONFIG_PATH = path.join(CONFIG_DIR, 'dingtalk_config.json')
+
+async function loadDingTalkConfigFromFile() {
+  try {
+    const raw = await fs.readFile(DINGTALK_CONFIG_PATH, 'utf-8')
+    const obj = JSON.parse(raw || '{}')
+    const appKey = String(obj.appKey || '')
+    const appSecret = String(obj.appSecret || '')
+    if (!appKey && !appSecret) return
+    const key = 'integration'
+    const existing = systemSettings.find(s => s && s.key === key)
+    if (existing) {
+      existing.value = {
+        ...existing.value,
+        dingtalkEnabled: true,
+        dingtalkAppKey: appKey,
+        dingtalkAppSecret: appSecret
+      }
+    } else {
+      const id = systemSettings.length ? Math.max(...systemSettings.map(s => s.id || 0)) + 1 : 1
+      systemSettings.push({ id, key, value: { dingtalkEnabled: true, dingtalkAppKey: appKey, dingtalkAppSecret: appSecret } })
+    }
+    console.log('Loaded DingTalk config from file')
+  } catch (_) {
+    // ignore when file not found or parse error
+  }
+}
+
+async function saveDingTalkConfigToFileFromSettings() {
+  const rec = systemSettings.find(s => s && s.key === 'integration' && s.value)
+  const v = rec && rec.value
+  const appKey = String(v?.dingtalkAppKey || '')
+  const appSecret = String(v?.dingtalkAppSecret || '')
+  if (!appKey && !appSecret) return
+  const payload = { appKey, appSecret }
+  try {
+    await fs.writeFile(DINGTALK_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf-8')
+    console.log('Persisted DingTalk config to', DINGTALK_CONFIG_PATH)
+  } catch (e) {
+    console.error('Persist DingTalk config failed:', e?.message || e)
+  }
+}
 const DB_ENABLED = process.env.DB_ENABLED === 'true'
 let dbPool = null
 async function initDB() {
@@ -163,6 +208,7 @@ function buildSafeUpdate(incoming, allowed) {
 
 async function start() {
   try { await initDB() } catch (e) { console.error('DB init failed:', e?.message || e) }
+  try { await loadDingTalkConfigFromFile() } catch (_) {}
   httpServer.listen(PORT, () => {
     console.log(`Backend server listening on http://localhost:${PORT}`)
   })
@@ -170,10 +216,19 @@ async function start() {
 start()
 // DingTalk helpers
 async function getDingTalkAccessToken() {
-  const appKey = process.env.DINGTALK_APP_KEY
-  const appSecret = process.env.DINGTALK_APP_SECRET
+  let appKey = process.env.DINGTALK_APP_KEY
+  let appSecret = process.env.DINGTALK_APP_SECRET
   if (!appKey || !appSecret) {
-    throw new Error('未配置钉钉APP Key/Secret，请在环境变量中设置 DINGTALK_APP_KEY / DINGTALK_APP_SECRET')
+    try {
+      const rec = systemSettings.find(s => s && s.key === 'integration' && s.value)
+      if (rec && rec.value) {
+        appKey = String(rec.value.dingtalkAppKey || '')
+        appSecret = String(rec.value.dingtalkAppSecret || '')
+      }
+    } catch (_) {}
+  }
+  if (!appKey || !appSecret) {
+    throw new Error('未配置钉钉APP Key/Secret，请在环境变量或系统设置中配置')
   }
   const resp = await axios.get('https://oapi.dingtalk.com/gettoken', {
     params: { appkey: appKey, appsecret: appSecret }
@@ -192,7 +247,7 @@ const httpServer = createServer(app)
 const io = new SocketIOServer(httpServer, {
   path: '/socket.io',
   cors: {
-    origin: ['http://localhost:3003', 'http://localhost:3004'],
+    origin: '*',
     methods: ['GET', 'POST']
   }
 })
@@ -306,42 +361,7 @@ let actionPlans = [
 ]
 
 // Department Targets (in-memory)
-let departmentTargets = [
-  {
-    id: 1,
-    year: new Date().getFullYear(),
-    department_id: 2,
-    department: '市场部',
-    target_level: 'B',
-    target_type: 'sales',
-    target_name: '销售目标',
-    target_value: 1200,
-    unit: '万元',
-    quarter: 'Q1',
-    month: 3,
-    current_value: 300,
-    responsible_person: '王五',
-    description: '一季度线上渠道销售指标',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 2,
-    year: new Date().getFullYear(),
-    department_id: 3,
-    department: '研发部',
-    target_level: 'A',
-    target_type: 'efficiency',
-    target_name: '效率目标',
-    target_value: 85,
-    unit: '%',
-    quarter: 'Q2',
-    month: 6,
-    current_value: 60,
-    responsible_person: '赵六',
-    description: '代码质量与交付效率提升',
-    created_at: new Date().toISOString()
-  }
-]
+let departmentTargets = []
 
 // Annual Work Plans
 let annualWorkPlans = []
@@ -431,15 +451,15 @@ app.put('/api/departments/:id', (req, res) => {
 app.delete('/api/departments/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
-    dbPool.query('DELETE FROM departments WHERE id = ?', [id])
-      .then(() => res.status(204).end())
+  dbPool.query('DELETE FROM departments WHERE id = ?', [id])
+      .then(() => res.json({ success: true }))
       .catch(() => res.status(500).json({ error: '数据库删除失败' }))
     return
   }
   const index = departments.findIndex(d => d.id === id)
   if (index === -1) return res.status(404).json({ error: '部门不存在' })
   departments.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 app.get('/api/dingtalk/departments', async (req, res) => {
@@ -626,15 +646,15 @@ app.put('/api/employees/:id', (req, res) => {
 app.delete('/api/employees/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
-    dbPool.query('DELETE FROM employees WHERE id = ?', [id])
-      .then(() => res.status(204).end())
+  dbPool.query('DELETE FROM employees WHERE id = ?', [id])
+      .then(() => res.json({ success: true }))
       .catch(() => res.status(500).json({ error: '数据库删除失败' }))
     return
   }
   const index = employees.findIndex(e => e.id === id)
   if (index === -1) return res.status(404).json({ error: '员工不存在' })
   employees.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 app.get('/api/dingtalk/employees', async (req, res) => {
@@ -948,7 +968,7 @@ app.delete('/api/action-plans/:id', (req, res) => {
   const index = actionPlans.findIndex(p => p.id === id)
   if (index === -1) return res.status(404).json({ error: '行动计划不存在' })
   actionPlans.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Simple Auth
@@ -1044,7 +1064,7 @@ app.delete('/api/department-targets/:id', (req, res) => {
   const index = departmentTargets.findIndex(t => t.id === id)
   if (index === -1) return res.status(404).json({ error: '部门目标不存在' })
   departmentTargets.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Health check
@@ -1057,8 +1077,13 @@ app.get('/api/health-check', (req, res) => {
 })
 
 app.get('/api/integration/status', (req, res) => {
-  const dingtalkConfigured = Boolean(process.env.DINGTALK_APP_KEY && process.env.DINGTALK_APP_SECRET)
-  res.json({ dingtalkConfigured })
+  const envOK = Boolean(process.env.DINGTALK_APP_KEY && process.env.DINGTALK_APP_SECRET)
+  let uiOK = false
+  try {
+    const rec = systemSettings.find(s => s && s.key === 'integration' && s.value)
+    uiOK = Boolean(rec && rec.value && rec.value.dingtalkAppKey && rec.value.dingtalkAppSecret)
+  } catch (_) {}
+  res.json({ dingtalkConfigured: envOK || uiOK })
 })
 
 // Admin: create simple JSON backup of in-memory data
@@ -1276,15 +1301,15 @@ app.put('/api/annual-work-plans/:id', (req, res) => {
 app.delete('/api/annual-work-plans/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
-    dbPool.query('DELETE FROM annual_work_plans WHERE id = ?', [id])
-      .then(() => res.status(204).end())
+  dbPool.query('DELETE FROM annual_work_plans WHERE id = ?', [id])
+      .then(() => res.json({ success: true }))
       .catch(() => res.status(500).json({ error: '数据库删除失败' }))
     return
   }
   const index = annualWorkPlans.findIndex(p => p.id === id)
   if (index === -1) return res.status(404).json({ error: '年度工作计划不存在' })
   annualWorkPlans.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Major Events
@@ -1386,15 +1411,15 @@ app.put('/api/major-events/:id', (req, res) => {
 app.delete('/api/major-events/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
-    dbPool.query('DELETE FROM major_events WHERE id = ?', [id])
-      .then(() => res.status(204).end())
+  dbPool.query('DELETE FROM major_events WHERE id = ?', [id])
+      .then(() => res.json({ success: true }))
       .catch(() => res.status(500).json({ error: '数据库删除失败' }))
     return
   }
   const index = majorEvents.findIndex(e => e.id === id)
   if (index === -1) return res.status(404).json({ error: '大事件不存在' })
   majorEvents.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Monthly Progress
@@ -1500,15 +1525,15 @@ app.put('/api/monthly-progress/:id', (req, res) => {
 app.delete('/api/monthly-progress/:id', (req, res) => {
   const id = Number(req.params.id)
   if (DB_ENABLED && dbPool) {
-    dbPool.query('DELETE FROM monthly_progress WHERE id = ?', [id])
-      .then(() => res.status(204).end())
+  dbPool.query('DELETE FROM monthly_progress WHERE id = ?', [id])
+      .then(() => res.json({ success: true }))
       .catch(() => res.status(500).json({ error: '数据库删除失败' }))
     return
   }
   const index = monthlyProgress.findIndex(p => p.id === id)
   if (index === -1) return res.status(404).json({ error: '月度推进计划不存在' })
   monthlyProgress.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Templates
@@ -1531,7 +1556,7 @@ app.delete('/api/templates/:id', (req, res) => {
   const index = templates.findIndex(t => t.id === id)
   if (index === -1) return res.status(404).json({ error: '模板不存在' })
   templates.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Target Types
@@ -1554,22 +1579,24 @@ app.delete('/api/target-types/:id', (req, res) => {
   const index = targetTypes.findIndex(t => t.id === id)
   if (index === -1) return res.status(404).json({ error: '目标类型不存在' })
   targetTypes.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // System Settings
 app.get('/api/system-settings', (req, res) => res.json(systemSettings))
-app.post('/api/system-settings', (req, res) => {
+app.post('/api/system-settings', async (req, res) => {
   const id = systemSettings.length ? Math.max(...systemSettings.map(s => s.id)) + 1 : 1
   const setting = { id, ...req.body }
   systemSettings.push(setting)
+  try { await saveDingTalkConfigToFileFromSettings() } catch (_) {}
   res.status(201).json(setting)
 })
-app.put('/api/system-settings/:id', (req, res) => {
+app.put('/api/system-settings/:id', async (req, res) => {
   const id = Number(req.params.id)
   const index = systemSettings.findIndex(s => s.id === id)
   if (index === -1) return res.status(404).json({ error: '系统设置不存在' })
   systemSettings[index] = { ...systemSettings[index], ...req.body }
+  try { await saveDingTalkConfigToFileFromSettings() } catch (_) {}
   res.json(systemSettings[index])
 })
 app.delete('/api/system-settings/:id', (req, res) => {
@@ -1577,7 +1604,7 @@ app.delete('/api/system-settings/:id', (req, res) => {
   const index = systemSettings.findIndex(s => s.id === id)
   if (index === -1) return res.status(404).json({ error: '系统设置不存在' })
   systemSettings.splice(index, 1)
-  res.status(204).end()
+  res.json({ success: true })
 })
 
 // Notifications

@@ -9,6 +9,7 @@ import Pagination from '../components/Pagination'
 import * as XLSX from 'xlsx'
 import PageHeaderBanner from '../components/PageHeaderBanner'
 import toast from 'react-hot-toast'
+import { loadLocalePrefs, formatDateTime } from '../utils/locale.js'
  
 
 const DepartmentTargets = () => {
@@ -77,6 +78,10 @@ const DepartmentTargets = () => {
   }, [])
 
   useEffect(() => {
+    loadLocalePrefs()
+  }, [])
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.get('add2025') === '1') {
       setShowAddTarget2025Modal(true)
@@ -123,9 +128,8 @@ const DepartmentTargets = () => {
 
   const loadTargets = async () => {
     const result = await getDepartmentTargets(filters)
-    if (result.success) {
-      setTargets(result.data || [])
-    }
+    const next = result && Array.isArray(result.data) ? result.data : []
+    setTargets(next)
   }
 
   const loadDepartments = async () => {
@@ -204,9 +208,14 @@ const DepartmentTargets = () => {
  
 
   const generateTableData = () => {
-    const safeTargets = Array.isArray(targets) ? (
-      filters.target_level ? targets.filter(t => t && t.target_level === filters.target_level) : targets
-    ) : []
+    const safeTargets = Array.isArray(targets) ? targets.filter(t => {
+      if (!t) return false
+      if (filters.year && String(t.year) !== String(filters.year)) return false
+      if (filters.department && t.department !== filters.department) return false
+      if (filters.targetType && t.target_type !== filters.targetType) return false
+      if (filters.target_level && t.target_level !== filters.target_level) return false
+      return true
+    }) : []
     const departments = [...new Set(safeTargets.map(t => t && t.department).filter(Boolean))]
     const levels = ['A', 'B', 'C', 'D']
     const months = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -332,34 +341,7 @@ const DepartmentTargets = () => {
     return s.length > n ? s.slice(0, n) + '...' : s
   }
 
-  const formatDateTime = (v) => {
-    if (!v && v !== 0) return '-'
-    const toDate = (val) => {
-      if (val instanceof Date) return val
-      if (typeof val === 'number') {
-        const ms = val < 1e12 ? val * 1000 : val
-        const d = new Date(ms)
-        return isNaN(d) ? null : d
-      }
-      if (typeof val === 'string') {
-        const d = new Date(val)
-        if (!isNaN(d)) return d
-        const norm = val.replace(' ', 'T')
-        const d2 = new Date(norm)
-        return isNaN(d2) ? null : d2
-      }
-      return null
-    }
-    const d = toDate(v)
-    if (!d) return typeof v === 'string' ? v : '-'
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const dd = String(d.getDate()).padStart(2, '0')
-    const hh = String(d.getHours()).padStart(2, '0')
-    const mm = String(d.getMinutes()).padStart(2, '0')
-    const ss = String(d.getSeconds()).padStart(2, '0')
-    return `${y}-${m}-${dd} ${hh}:${mm}:${ss}`
-  }
+
 
 
   return (
@@ -902,7 +884,7 @@ const DepartmentTargets = () => {
                 </div>
               </div>
               <div>
-                共 {Array.isArray(targets) ? targets.length : 0} 条记录 • 更新时间: {new Date().toLocaleString()}
+                共 {Array.isArray(targets) ? targets.length : 0} 条记录 • 更新时间: {formatDateTime(new Date())}
               </div>
             </div>
           </div>
@@ -1096,9 +1078,20 @@ const DepartmentTargets = () => {
               ? Object.values(tableData.data[deleteDialog.department][deleteDialog.level]).flat()
               : []
             const ids = flat.map(t => t?.id).filter(Boolean)
-            await Promise.all(ids.map(id => deleteDepartmentTarget(id)))
-            toast.success('已删除该组目标')
-            await loadTargets()
+            if (!ids.length) {
+              toast.error('没有可删除的记录')
+              await loadTargets()
+              return
+            }
+            const results = await Promise.all(ids.map(id => deleteDepartmentTarget(id)))
+            const allOk = results.every(r => r && r.success)
+            if (allOk) {
+              setTargets(prev => prev.filter(t => !ids.includes(t.id)))
+              toast.success('已删除该组目标')
+              await loadTargets()
+            } else {
+              toast.error('部分或全部删除失败')
+            }
           } catch (e) {
             toast.error('删除失败')
           }
