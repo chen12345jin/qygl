@@ -462,30 +462,109 @@ const AnnualWorkPlan = () => {
       const workbook = XLSX.read(data)
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
-      const rows = XLSX.utils.sheet_to_json(sheet)
-      for (const row of rows) {
-        const payload = {
-          year: Number(row['年度'] || filters.year),
-          department: row['部门'] || '',
-          plan_name: row['计划名称'] || row['事件名称'] || '',
-          month: row['月份'] ? Number(row['月份']) : null,
-          category: row['类别'] || row['事件类型'] || '',
-          priority: row['优先级'] || row['重要级别'] || '',
-          start_date: row['开始日期'] || row['发生日期'] || '',
-          end_date: row['结束日期'] || row['关闭日期'] || '',
-          budget: row['预算（万元）'] ? Number(row['预算（万元）']) : null,
-          actual_cost: row['实际成本（万元）'] ? Number(row['实际成本（万元）']) : null,
-          status: row['状态'] || '',
-          expected_result: row['预期结果'] ? Number(row['预期结果']) : null,
-          actual_result: row['实际结果'] ? Number(row['实际结果']) : null,
-          progress: row['进度'] ? Number(row['进度']) : null,
-          responsible_person: row['负责人'] || '',
-          description: row['预期成果'] || row['复盘要点'] || ''
+      
+      // 先读取原始数据，检查是否有提示行
+      let rows = XLSX.utils.sheet_to_json(sheet)
+      
+      // 检查第一行是否是提示行
+      if (rows.length > 0) {
+        const firstRowKeys = Object.keys(rows[0])
+        const firstRowValues = Object.values(rows[0]).map(v => String(v || ''))
+        const isHintRow = firstRowKeys.some(k => k.includes('提示') || k.includes('必填') || k.includes('红色')) ||
+                          firstRowValues.some(v => v.includes('提示') || v.includes('必填') || v.includes('红色'))
+        if (isHintRow) {
+          rows = XLSX.utils.sheet_to_json(sheet, { range: 1 })
         }
-        await addAnnualWorkPlan(payload)
+      }
+      
+      // 获取字段值（支持带星号的列名）
+      const getField = (row, ...keys) => {
+        for (const key of keys) {
+          if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key]
+          if (row[key + '*'] !== undefined && row[key + '*'] !== null && row[key + '*'] !== '') return row[key + '*']
+        }
+        return ''
+      }
+      
+      // 月份解析
+      const parseMonthValue = (val) => {
+        if (!val) return null
+        const str = String(val).trim()
+        const match = str.match(/^(\d+)/)
+        if (match) return Number(match[1])
+        return null
+      }
+      
+      // 数值解析
+      const parseNumericValue = (val) => {
+        if (val === null || val === undefined || val === '') return null
+        const str = String(val).replace(/[,，%％]/g, '').trim()
+        const num = parseFloat(str)
+        return isNaN(num) ? null : num
+      }
+      
+      // 去重
+      const seen = new Set()
+      let importedCount = 0
+      let skippedCount = 0
+      
+      for (const row of rows) {
+        const hasData = Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '')
+        if (!hasData) {
+          skippedCount++
+          continue
+        }
+        
+        const dept = getField(row, '部门', 'department')
+        const planName = getField(row, '计划名称', '事件名称', 'plan_name', 'event_name')
+        const month = parseMonthValue(getField(row, '月份', 'month'))
+        
+        if (!planName) {
+          skippedCount++
+          continue
+        }
+        
+        const key = `${dept}|${planName}|${month}`
+        if (seen.has(key)) {
+          skippedCount++
+          continue
+        }
+        seen.add(key)
+        
+        const payload = {
+          year: Number(getField(row, '年度', 'year')) || filters.year,
+          department: dept,
+          plan_name: planName,
+          month: month,
+          category: getField(row, '类别', '事件类型', 'category'),
+          priority: getField(row, '优先级', '重要级别', '重要性', 'priority'),
+          start_date: getField(row, '开始日期', '开始时间', '发生日期', 'start_date'),
+          end_date: getField(row, '结束日期', '结束时间', '关闭日期', 'end_date'),
+          budget: parseNumericValue(getField(row, '预算（万元）', '预算', 'budget')),
+          actual_cost: parseNumericValue(getField(row, '实际成本（万元）', '实际成本', 'actual_cost')),
+          status: getField(row, '状态', 'status'),
+          expected_result: parseNumericValue(getField(row, '预期结果', 'expected_result')),
+          actual_result: parseNumericValue(getField(row, '实际结果', 'actual_result')),
+          progress: parseNumericValue(getField(row, '进度', '进度（%）', 'progress')),
+          responsible_person: getField(row, '负责人', 'owner', 'responsible_person'),
+          description: getField(row, '预期成果', '复盘要点', '描述', 'description')
+        }
+        
+        try {
+          await addAnnualWorkPlan(payload)
+          importedCount++
+        } catch (err) {
+          console.error('导入单条记录失败:', err)
+          skippedCount++
+        }
       }
       await loadPlans()
-      toast.success('导入完成')
+      
+      if (importedCount > 0) {
+        toast.success(`导入完成：成功 ${importedCount} 条${skippedCount > 0 ? `，跳过 ${skippedCount} 条` : ''}`)
+      } else {
+        toast.error(`导入失败：跳过 ${skippedCount} 条。请检查Excel列名是否正确`)
+      }
     } catch (e) {
       console.error('导入失败:', e)
       toast.error('导入失败，请检查文件格式')

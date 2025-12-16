@@ -392,27 +392,175 @@ const DepartmentTargets = () => {
       const workbook = XLSX.read(data)
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
-      const rows = XLSX.utils.sheet_to_json(sheet)
-      for (const row of rows) {
-        const dept = departments.find(d => d.name === (row['部门'] || row['部门名称']))
-        const payload = {
-          year: Number(row['年度'] || filters.year),
-          department_id: dept ? dept.id : undefined,
-          target_level: row['级别'] || 'A',
-          target_type: row['目标类型'] || '',
-          target_name: row['目标名称'] || '',
-          target_value: row['目标值'] ? Number(row['目标值']) : null,
-          unit: row['单位'] || '',
-          month: row['月份'] ? Number(row['月份']) : null,
-          current_value: row['当前值'] ? Number(row['当前值']) : 0,
-          status: row['状态'] || '',
-          responsible_person: row['负责人'] || '',
-          description: row['描述'] || ''
+      
+      // 先读取原始数据，检查是否有提示行
+      let rows = XLSX.utils.sheet_to_json(sheet)
+      
+      console.log('Excel导入 - 原始行数:', rows.length)
+      console.log('Excel导入 - 第一行数据:', rows[0])
+      console.log('Excel导入 - 所有列名:', rows.length > 0 ? Object.keys(rows[0]) : [])
+      
+      // 检查第一行是否是提示行（包含"必填"、"提示"等关键词）
+      if (rows.length > 0) {
+        const firstRowKeys = Object.keys(rows[0])
+        const firstRowValues = Object.values(rows[0]).map(v => String(v || ''))
+        const isHintRow = firstRowKeys.some(k => k.includes('提示') || k.includes('必填') || k.includes('红色')) ||
+                          firstRowValues.some(v => v.includes('提示') || v.includes('必填') || v.includes('红色'))
+        
+        if (isHintRow) {
+          console.log('检测到提示行，尝试从第2行开始读取')
+          // 重新读取，跳过第一行
+          rows = XLSX.utils.sheet_to_json(sheet, { range: 1 })
+          console.log('跳过提示行后 - 行数:', rows.length)
+          console.log('跳过提示行后 - 第一行:', rows[0])
+          console.log('跳过提示行后 - 列名:', rows.length > 0 ? Object.keys(rows[0]) : [])
         }
-        await addDepartmentTarget(payload)
       }
+      
+      // 目标类型反向映射（中文 -> 英文）
+      const targetTypeReverseMap = {
+        '销售目标': 'sales',
+        '利润目标': 'profit',
+        '项目目标': 'project',
+        '效率目标': 'efficiency',
+        '质量目标': 'quality',
+        '成本目标': 'cost',
+        '销售': 'sales',
+        '利润': 'profit',
+        '项目': 'project',
+        '效率': 'efficiency',
+        '质量': 'quality',
+        '成本': 'cost'
+      }
+      
+      // 级别解析（支持 "A-保底" 格式）
+      const parseLevelValue = (val) => {
+        if (!val) return 'A'
+        const str = String(val).trim()
+        const match = str.match(/^([A-D])/i)
+        if (match) return match[1].toUpperCase()
+        return str.toUpperCase() || 'A'
+      }
+      
+      // 月份解析（支持 "1月" 或 "1" 格式）
+      const parseMonthValue = (val) => {
+        if (!val) return null
+        const str = String(val).trim()
+        const match = str.match(/^(\d+)/)
+        if (match) return Number(match[1])
+        return null
+      }
+      
+      // 数值解析
+      const parseNumericValue = (val) => {
+        if (val === null || val === undefined || val === '') return null
+        const str = String(val).replace(/[,，]/g, '').trim()
+        const num = parseFloat(str)
+        return isNaN(num) ? null : num
+      }
+      
+      let importedCount = 0
+      let skippedCount = 0
+      let duplicateCount = 0
+      
+      // 用于去重的集合
+      const importedKeys = new Set()
+      
+      for (const row of rows) {
+        // 检查是否有任何有效数据
+        const values = Object.values(row)
+        const hasData = values.some(v => v !== null && v !== undefined && String(v).trim() !== '')
+        if (!hasData) {
+          console.log('跳过空行')
+          skippedCount++
+          continue
+        }
+        
+        // 获取字段值（支持多种可能的列名，包括带星号的）
+        const getField = (row, ...keys) => {
+          for (const key of keys) {
+            if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key]
+            // 尝试带星号的版本
+            if (row[key + '*'] !== undefined && row[key + '*'] !== null && row[key + '*'] !== '') return row[key + '*']
+          }
+          return ''
+        }
+        
+        const deptName = getField(row, '部门', '部门名称', 'department')
+        const targetName = getField(row, '目标名称', 'target_name')
+        const rawTargetType = getField(row, '目标类型', 'target_type')
+        const rawLevel = getField(row, '级别', 'target_level')
+        const rawMonth = getField(row, '月份', 'month')
+        
+        // 跳过没有关键数据的行（必须有部门或目标名称）
+        if (!deptName && !targetName) {
+          console.log('跳过无关键数据行:', row)
+          skippedCount++
+          continue
+        }
+        
+        const level = parseLevelValue(rawLevel)
+        const targetType = targetTypeReverseMap[rawTargetType] || rawTargetType
+        const month = parseMonthValue(rawMonth)
+        
+        // 生成唯一键用于去重
+        const key = `${deptName}|${level}|${targetType}|${targetName}|${month}`
+        if (importedKeys.has(key)) {
+          console.log('跳过重复行:', key)
+          duplicateCount++
+          continue
+        }
+        importedKeys.add(key)
+        
+        const dept = departments.find(d => d.name === deptName)
+        const targetValue = parseNumericValue(getField(row, '目标值', 'target_value'))
+        const currentValue = parseNumericValue(getField(row, '当前值', 'current_value'))
+        const rawQuarter = getField(row, '季度', 'quarter')
+        
+        const payload = {
+          year: Number(getField(row, '年度', 'year')) || filters.year,
+          department: deptName,
+          department_id: dept ? dept.id : undefined,
+          target_level: level,
+          target_type: targetType,
+          target_name: targetName,
+          target_value: targetValue,
+          unit: getField(row, '单位', 'unit'),
+          quarter: rawQuarter ? Number(String(rawQuarter).replace(/[^0-9]/g, '')) : null,
+          month: month,
+          current_value: currentValue !== null ? currentValue : 0,
+          status: getField(row, '状态', 'status'),
+          responsible_person: getField(row, '负责人', 'responsible_person'),
+          description: getField(row, '描述', 'description')
+        }
+        
+        console.log('准备导入:', payload)
+        
+        try {
+          await addDepartmentTarget(payload)
+          importedCount++
+        } catch (err) {
+          console.error('导入单条记录失败:', err, payload)
+          skippedCount++
+        }
+      }
+      
       await loadTargets()
-      toast.success('导入完成')
+      
+      // 构建详细的导入结果消息
+      let message = `导入完成：成功 ${importedCount} 条`
+      const skippedDetails = []
+      if (skippedCount > 0) skippedDetails.push(`${skippedCount} 条无效`)
+      if (duplicateCount > 0) skippedDetails.push(`${duplicateCount} 条重复`)
+      if (skippedDetails.length > 0) {
+        message += `，跳过 ${skippedDetails.join('、')}`
+      }
+      
+      if (importedCount > 0) {
+        toast.success(message)
+      } else {
+        toast.error(message + '。请检查Excel列名是否正确（需要：部门、级别、目标类型、目标名称、目标值、单位、月份等）')
+      }
     } catch (e) {
       console.error('导入失败:', e)
       toast.error('导入失败，请检查文件格式')

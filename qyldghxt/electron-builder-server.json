@@ -3,7 +3,7 @@
   "productName": "企业年度规划系统-服务端", 
   "electronVersion": "32.2.0",
   "directories": { 
-    "output": "D:/qygl/qyldghxt/azb/1.0.4/release/server"
+    "output": "D:/qygl/qyldghxt/azb/1.0.5/release/server"
   },
   "files": [
     "electron/server-main.js"
@@ -38,7 +38,7 @@
       "filter": ["**/*", "!**/*.ts", "!test/"] 
     }, 
     { 
-      "from": "azb/1.0.4/release/server-source/backend-service.exe", 
+      "from": "azb/1.0.5/release/server-source/backend-service.exe", 
       "to": "backend/backend-service.exe" 
     }, 
     { 

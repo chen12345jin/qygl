@@ -600,6 +600,49 @@ function shouldWriteAuditLog() {
   return true;
 }
 
+// API路径到操作描述的映射表 - 必须在appendAuditLog之前定义
+const API_PATH_MAPPING = {
+  '/api/login': { action: '用户登录', description: '用户登录系统' },
+  '/api/annual-work-plans': { action: '年度工作落地规划', description: '操作年度工作落地规划' },
+  '/api/major-events': { action: '大事件', description: '操作大事件' },
+  '/api/monthly-progress': { action: '月度推进计划', description: '操作月度推进计划' },
+  '/api/action-plans': { action: '行动计划', description: '操作行动计划' },
+  '/api/departments': { action: '部门管理', description: '操作部门信息' },
+  '/api/employees': { action: '员工管理', description: '操作员工信息' },
+  '/api/users': { action: '用户管理', description: '操作用户账号' },
+  '/api/roles': { action: '角色管理', description: '操作角色权限' },
+  '/api/target-types': { action: '目标类型', description: '操作目标类型' },
+  '/api/department-targets': { action: '部门目标分解', description: '操作部门目标分解' },
+  '/api/notifications': { action: '通知管理', description: '操作系统通知' },
+  '/api/system-settings': { action: '系统设置', description: '操作系统设置' },
+  '/api/company-info': { action: '公司信息', description: '操作公司信息' },
+  '/api/templates': { action: '模板管理', description: '操作模板' },
+  '/api/admin/backups': { action: '备份管理', description: '操作系统备份' },
+  '/api/admin/backup': { action: '创建备份', description: '创建系统备份' },
+  '/api/admin/cleanup-data': { action: '数据清理', description: '清理系统数据' },
+  '/api/dingtalk/employees': { action: '钉钉员工', description: '获取钉钉员工列表' },
+  '/api/departments/sync-dingtalk': { action: '同步钉钉部门', description: '从钉钉同步部门数据' },
+  '/api/employees/sync-dingtalk': { action: '同步钉钉员工', description: '从钉钉同步员工数据' },
+  '/api/upload': { action: '文件上传', description: '上传文件' },
+  '/api/logs': { action: '系统日志', description: '操作日志记录' }
+};
+
+// 从请求体中提取关键信息 - 必须在appendAuditLog之前定义
+function extractKeyInfo(body) {
+  if (!body || typeof body !== 'object') return '';
+  
+  const keyFields = ['name', 'title', 'username', 'department', 'role', 'year', 'status'];
+  const info = [];
+  
+  for (const field of keyFields) {
+    if (body[field] && typeof body[field] === 'string' && body[field].trim() !== '') {
+      info.push(`${field}: ${body[field]}`);
+    }
+  }
+  
+  return info.length > 0 ? ` (${info.join(', ')})` : '';
+}
+
 function appendAuditLog(entry) {
   try {
     if (!shouldWriteAuditLog()) return;
@@ -1651,49 +1694,6 @@ app.delete('/api/roles/:id', (req, res) => {
   }
   res.json({ success: true });
 });
-
-// API路径到操作描述的映射表
-const API_PATH_MAPPING = {
-  '/api/login': { action: '用户登录', description: '用户登录系统' },
-  '/api/annual-work-plans': { action: '年度工作落地规划', description: '操作年度工作落地规划' },
-  '/api/major-events': { action: '大事件', description: '操作大事件' },
-  '/api/monthly-progress': { action: '月度推进计划', description: '操作月度推进计划' },
-  '/api/action-plans': { action: '行动计划', description: '操作行动计划' },
-  '/api/departments': { action: '部门管理', description: '操作部门信息' },
-  '/api/employees': { action: '员工管理', description: '操作员工信息' },
-  '/api/users': { action: '用户管理', description: '操作用户账号' },
-  '/api/roles': { action: '角色管理', description: '操作角色权限' },
-  '/api/target-types': { action: '目标类型', description: '操作目标类型' },
-  '/api/department-targets': { action: '部门目标分解', description: '操作部门目标分解' },
-  '/api/notifications': { action: '通知管理', description: '操作系统通知' },
-  '/api/system-settings': { action: '系统设置', description: '操作系统设置' },
-  '/api/company-info': { action: '公司信息', description: '操作公司信息' },
-  '/api/templates': { action: '模板管理', description: '操作模板' },
-  '/api/admin/backups': { action: '备份管理', description: '操作系统备份' },
-  '/api/admin/backup': { action: '创建备份', description: '创建系统备份' },
-  '/api/admin/cleanup-data': { action: '数据清理', description: '清理系统数据' },
-  '/api/dingtalk/employees': { action: '钉钉员工', description: '获取钉钉员工列表' },
-  '/api/departments/sync-dingtalk': { action: '同步钉钉部门', description: '从钉钉同步部门数据' },
-  '/api/employees/sync-dingtalk': { action: '同步钉钉员工', description: '从钉钉同步员工数据' },
-  '/api/upload': { action: '文件上传', description: '上传文件' },
-  '/api/logs': { action: '系统日志', description: '操作日志记录' }
-};
-
-// 从请求体中提取关键信息
-function extractKeyInfo(body) {
-  if (!body || typeof body !== 'object') return '';
-  
-  const keyFields = ['name', 'title', 'username', 'department', 'role', 'year', 'status'];
-  const info = [];
-  
-  for (const field of keyFields) {
-    if (body[field] && typeof body[field] === 'string' && body[field].trim() !== '') {
-      info.push(`${field}: ${body[field]}`);
-    }
-  }
-  
-  return info.length > 0 ? ` (${info.join(', ')})` : '';
-}
 
 function mapAuditRecordToLogView(rec) {
   if (!rec || typeof rec !== 'object') return null;

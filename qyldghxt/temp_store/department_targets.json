@@ -58,5 +58,25 @@
     "completion_rate": "0%",
     "responsible_person": "1",
     "description": ""
+  },
+  {
+    "id": 4,
+    "created_at": "2025-12-16T10:33:34.722Z",
+    "year": 2026,
+    "department_id": 16,
+    "department": "客户",
+    "department_name": "客户",
+    "target_level": "A",
+    "target_type": "sales",
+    "target_name": 1,
+    "target_value": 1,
+    "unit": 1,
+    "month": 12,
+    "quarter": 4,
+    "current_value": 0,
+    "status": "",
+    "completion_rate": "",
+    "responsible_person": 1,
+    "description": ""
   }
 ]

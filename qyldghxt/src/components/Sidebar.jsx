@@ -41,6 +41,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
     { id: 'monthly-progress', icon: TrendingUp, label: '月度推进计划', path: '/monthly-progress', perm: '数据查看' },
     { id: 'action-plans', icon: CheckSquare, label: '5W2H行动计划', path: '/action-plans', perm: '数据查看' },
     { id: 'score-and-output', icon: Database, label: '积分 & 产值', path: '/score-and-output', perm: 'admin' },
+    { id: 'templates', icon: FileText, label: '模板设置', path: '/system/templates', perm: '系统管理' },
     { id: 'data-analysis', icon: BarChart, label: '数据分析', path: '/data-analysis', perm: '数据查看' },
   ]
 
@@ -52,8 +53,6 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
     { id: 'roles', icon: Shield, label: '角色管理', path: '/system/roles', perm: '系统管理' },
     { id: 'users', icon: Users, label: '用户管理', path: '/system/users', perm: '用户管理' },
     { id: 'logs', icon: FileText, label: '系统日志', path: '/system/logs', perm: '系统管理' },
-
-    { id: 'templates', icon: FileText, label: '模板设置', path: '/system/templates', perm: '系统管理' },
     { id: 'dingtalk', icon: Bell, label: '钉钉集成', path: '/system/dingtalk', perm: '系统管理' },
     { id: 'settings', icon: Settings, label: '系统设置', path: '/system/settings', perm: '系统管理' },
   ]

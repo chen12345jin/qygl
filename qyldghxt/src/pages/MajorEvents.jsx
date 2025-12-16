@@ -369,36 +369,87 @@ const MajorEvents = () => {
           const workbook = XLSX.read(data, { type: 'array' })
           const sheetName = workbook.SheetNames[0]
           const sheet = workbook.Sheets[sheetName]
-          const rows = XLSX.utils.sheet_to_json(sheet)
+          
+          // 先读取原始数据，检查是否有提示行
+          let rows = XLSX.utils.sheet_to_json(sheet)
           if (!rows || rows.length === 0) {
             toast('文件中没有数据', { icon: 'ℹ️' })
             return
           }
+          
+          // 检查第一行是否是提示行
+          const firstRowKeys = Object.keys(rows[0])
+          const firstRowValues = Object.values(rows[0]).map(v => String(v || ''))
+          const isHintRow = firstRowKeys.some(k => k.includes('提示') || k.includes('必填') || k.includes('红色')) ||
+                            firstRowValues.some(v => v.includes('提示') || v.includes('必填') || v.includes('红色'))
+          if (isHintRow) {
+            rows = XLSX.utils.sheet_to_json(sheet, { range: 1 })
+          }
+          
+          // 获取字段值（支持带星号的列名）
+          const getField = (row, ...keys) => {
+            for (const key of keys) {
+              if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key]
+              if (row[key + '*'] !== undefined && row[key + '*'] !== null && row[key + '*'] !== '') return row[key + '*']
+            }
+            return ''
+          }
+          
+          const seen = new Set()
           let success = 0
+          let skipped = 0
+          
           for (const row of rows) {
+            const hasData = Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '')
+            if (!hasData) {
+              skipped++
+              continue
+            }
+            
+            const eventName = getField(row, '事件名称', 'event_name')
+            const eventType = getField(row, '事件类型', 'event_type')
+            const plannedDate = getField(row, '计划日期', '计划月份', 'planned_date')
+            
+            if (!eventName) {
+              skipped++
+              continue
+            }
+            
+            const key = `${eventName}|${eventType}|${plannedDate}`
+            if (seen.has(key)) {
+              skipped++
+              continue
+            }
+            seen.add(key)
+            
             const payload = {
-              year: filters.year,
-              event_name: row.event_name || row.事件名称 || '',
-              event_type: row.event_type || row.事件类型 || '',
-              importance: row.importance || row.重要性 || '',
-              planned_date: row.planned_date || row.计划日期 || row.计划月份 || '',
-              actual_date: row.actual_date || row.实际日期 || row.实际月份 || '',
-              responsible_department: row.responsible_department || row.负责部门 || '',
-              responsible_person: row.responsible_person || row.负责人 || '',
-              status: row.status || row.状态 || '',
-              progress: (row.progress ?? row['进度（%）'] ?? row['进度']) || '',
-              budget: (row.budget ?? row['预算（万元）'] ?? row['预算']) || '',
-              actual_cost: (row.actual_cost ?? row['实际成本（万元）'] ?? row['实际成本']) || '',
-              description: row.description || row.事件描述 || '',
-              key_points: row.key_points || row.关键要点 || '',
-              success_criteria: row.success_criteria || row.成功标准 || '',
-              risks: row.risks || row.风险因素 || '',
-              lessons_learned: row.lessons_learned || row.经验教训 || ''
+              year: Number(getField(row, '年度', 'year')) || filters.year,
+              event_name: eventName,
+              event_type: eventType,
+              importance: getField(row, '重要性', '重要程度', 'importance'),
+              planned_date: plannedDate,
+              actual_date: getField(row, '实际日期', '实际月份', 'actual_date'),
+              responsible_department: getField(row, '负责部门', 'responsible_department'),
+              responsible_person: getField(row, '负责人', 'responsible_person'),
+              status: getField(row, '状态', 'status'),
+              progress: getField(row, '进度（%）', '进度', 'progress'),
+              budget: getField(row, '预算（万元）', '预算', 'budget'),
+              actual_cost: getField(row, '实际成本（万元）', '实际成本', 'actual_cost'),
+              description: getField(row, '事件描述', '描述', 'description'),
+              key_points: getField(row, '关键要点', 'key_points'),
+              success_criteria: getField(row, '成功标准', 'success_criteria'),
+              risks: getField(row, '风险因素', 'risks'),
+              lessons_learned: getField(row, '经验教训', 'lessons_learned')
             }
             const ok = await handleAdd(payload)
             if (ok) success += 1
           }
-          toast.success(`已导入 ${success}/${rows.length} 条`)
+          
+          if (success > 0) {
+            toast.success(`导入完成：成功 ${success} 条${skipped > 0 ? `，跳过 ${skipped} 条` : ''}`)
+          } else {
+            toast.error(`导入失败：跳过 ${skipped} 条。请检查Excel列名是否正确`)
+          }
         } catch (err) {
           console.error('导入失败:', err)
           toast.error('导入失败，请检查文件格式')

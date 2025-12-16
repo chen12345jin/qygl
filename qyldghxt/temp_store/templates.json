@@ -1,8 +1,8 @@
 [
   {
     "id": 1,
-    "created_at": "2025-12-16T05:33:06.044Z",
-    "updated_at": "2025-12-16T05:33:06.039Z",
+    "created_at": "2025-12-16T10:18:27.684Z",
+    "updated_at": "2025-12-16T10:18:27.673Z",
     "name": "1",
     "type": "department_target",
     "description": "",
@@ -213,6 +213,127 @@
       {
         "key": "description",
         "label": "描述",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "created_at": "2025-12-16T10:30:28.898Z",
+    "updated_at": "2025-12-16T10:30:28.890Z",
+    "name": "2",
+    "type": "annual_work_plan",
+    "description": "",
+    "fields": [
+      {
+        "key": "month_theme",
+        "label": "月份/主题",
+        "type": "select",
+        "required": true,
+        "options": [
+          {
+            "value": "1",
+            "label": "1月 - 规划导航月"
+          },
+          {
+            "value": "2",
+            "label": "2月 - 启动推进月"
+          },
+          {
+            "value": "3",
+            "label": "3月 - 落地执行月"
+          },
+          {
+            "value": "4",
+            "label": "4月 - 优化提升月"
+          },
+          {
+            "value": "5",
+            "label": "5月 - 中期检查月"
+          },
+          {
+            "value": "6",
+            "label": "6月 - 半年度总结月"
+          },
+          {
+            "value": "7",
+            "label": "7月 - 调整规划月"
+          },
+          {
+            "value": "8",
+            "label": "8月 - 全力冲刺月"
+          },
+          {
+            "value": "9",
+            "label": "9月 - 三季度总结月"
+          },
+          {
+            "value": "10",
+            "label": "10月 - 年度冲刺月"
+          },
+          {
+            "value": "11",
+            "label": "11月 - 年度复盘月"
+          },
+          {
+            "value": "12",
+            "label": "12月 - 年度总结月"
+          }
+        ]
+      },
+      {
+        "key": "plan_name",
+        "label": "计划名称",
+        "type": "text",
+        "required": true
+      },
+      {
+        "key": "department",
+        "label": "负责部门",
+        "type": "select",
+        "required": true,
+        "options": []
+      },
+      {
+        "key": "category",
+        "label": "类别",
+        "type": "select",
+        "required": true,
+        "options": [
+          {
+            "value": "strategic",
+            "label": "战略性事件"
+          },
+          {
+            "value": "operational",
+            "label": "运营性事件"
+          },
+          {
+            "value": "risk",
+            "label": "风险性事件"
+          },
+          {
+            "value": "opportunity",
+            "label": "机会性事件"
+          },
+          {
+            "value": "business",
+            "label": "业务性事件"
+          },
+          {
+            "value": "management",
+            "label": "管理性事件"
+          },
+          {
+            "value": "temporary",
+            "label": "临时性事件"
+          }
+        ]
+      },
+      {
+        "key": "description",
+        "label": "计划描述",
         "type": "textarea",
         "required": false
       }
