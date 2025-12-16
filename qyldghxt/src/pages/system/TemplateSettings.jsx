@@ -4,6 +4,7 @@ import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { toast } from 'react-hot-toast'
 import { useData } from '../../contexts/DataContext'
 import DeleteConfirmDialog from '../../components/DeleteConfirmDialog'
+import XLSX from 'xlsx-js-style'
 
 const TemplateSettings = () => {
   const { getTemplates, addTemplate, updateTemplate, deleteTemplate, loading } = useData()
@@ -21,48 +22,45 @@ const TemplateSettings = () => {
     description: '',
     fields: []
   })
+  const [formErrors, setFormErrors] = useState({})
+
+  // 监听模板类型变化，自动更新字段
+  useEffect(() => {
+    if (formData.type && fieldMap[formData.type]) {
+      setFormData(prev => ({
+        ...prev,
+        fields: fieldMap[formData.type] || []
+      }))
+    }
+  }, [formData.type])
 
   // 定义字段映射
   const fieldMap = {
     department_target: [
-      { key: 'department', label: '部门', type: 'text', required: true },
-      { key: 'target_type', label: '目标类型', type: 'select', required: true, options: [
-        { value: 'sales', label: '销售目标' },
-        { value: 'profit', label: '利润目标' },
-        { value: 'cost', label: '成本目标' }
+      { key: 'department', label: '部门', type: 'select', required: true, options: [] },
+      { key: 'level', label: '级别', type: 'select', required: true, options: [
+        { value: 'A', label: 'A-保底' },
+        { value: 'B', label: 'B-平衡' },
+        { value: 'C', label: 'C-突破' },
+        { value: 'D', label: 'D-冲刺' }
       ]},
+      { key: 'target_type', label: '目标类型', type: 'select', required: true, options: [
+        { value: 'sales', label: '销售' },
+        { value: 'profit', label: '利润' },
+        { value: 'project', label: '项目' },
+        { value: 'efficiency', label: '效率' },
+        { value: 'quality', label: '质量' },
+        { value: 'cost', label: '成本' }
+      ]},
+      { key: 'target_name', label: '目标名称', type: 'text', required: true },
       { key: 'target_value', label: '目标值', type: 'number', required: true },
       { key: 'unit', label: '单位', type: 'text', required: true },
-      { key: 'description', label: '描述', type: 'textarea', required: false }
-    ],
-    annual_work_plan: [
-      { key: 'title', label: '计划标题', type: 'text', required: true },
-      { key: 'department', label: '责任部门', type: 'text', required: true },
-      { key: 'start_date', label: '开始日期', type: 'date', required: true },
-      { key: 'end_date', label: '结束日期', type: 'date', required: true },
-      { key: 'description', label: '计划描述', type: 'textarea', required: true },
-      { key: 'priority', label: '优先级', type: 'select', required: true, options: [
-        { value: 'high', label: '高' },
-        { value: 'medium', label: '中' },
-        { value: 'low', label: '低' }
-      ]}
-    ],
-    major_event: [
-      { key: 'event_name', label: '事件名称', type: 'text', required: true },
-      { key: 'event_type', label: '事件类型', type: 'select', required: true, options: [
-        { value: 'strategic', label: '战略性事件' },
-        { value: 'operational', label: '运营性事件' },
-        { value: 'market', label: '市场性事件' }
+      { key: 'quarter', label: '季度', type: 'select', required: true, options: [
+        { value: 'Q1', label: 'Q1' },
+        { value: 'Q2', label: 'Q2' },
+        { value: 'Q3', label: 'Q3' },
+        { value: 'Q4', label: 'Q4' }
       ]},
-      { key: 'impact_level', label: '影响程度', type: 'select', required: true, options: [
-        { value: 'high', label: '高' },
-        { value: 'medium', label: '中' },
-        { value: 'low', label: '低' }
-      ]},
-      { key: 'planned_date', label: '计划日期', type: 'date', required: true },
-      { key: 'description', label: '事件描述', type: 'textarea', required: true }
-    ],
-    monthly_progress: [
       { key: 'month', label: '月份', type: 'select', required: true, options: [
         { value: '1', label: '1月' },
         { value: '2', label: '2月' },
@@ -77,19 +75,99 @@ const TemplateSettings = () => {
         { value: '11', label: '11月' },
         { value: '12', label: '12月' }
       ]},
-      { key: 'progress_rate', label: '完成率', type: 'number', required: true },
-      { key: 'target_amount', label: '目标金额', type: 'number', required: true },
-      { key: 'actual_amount', label: '实际金额', type: 'number', required: true },
+      { key: 'current_value', label: '当前值', type: 'number', required: false },
+      { key: 'progress', label: '进度', type: 'number', required: false },
+      { key: 'status', label: '状态', type: 'select', required: false, options: [
+        { value: 'not_started', label: '未开始' },
+        { value: 'in_progress', label: '进行中' },
+        { value: 'completed', label: '已完成' },
+        { value: 'delayed', label: '已延迟' }
+      ]},
+      { key: 'responsible_person', label: '负责人', type: 'text', required: true },
+      { key: 'description', label: '描述', type: 'textarea', required: false }
+    ],
+    annual_work_plan: [
+      { key: 'month_theme', label: '月份/主题', type: 'select', required: true, options: [
+        { value: '1', label: '1月 - 规划导航月' },
+        { value: '2', label: '2月 - 启动推进月' },
+        { value: '3', label: '3月 - 落地执行月' },
+        { value: '4', label: '4月 - 优化提升月' },
+        { value: '5', label: '5月 - 中期检查月' },
+        { value: '6', label: '6月 - 半年度总结月' },
+        { value: '7', label: '7月 - 调整规划月' },
+        { value: '8', label: '8月 - 全力冲刺月' },
+        { value: '9', label: '9月 - 三季度总结月' },
+        { value: '10', label: '10月 - 年度冲刺月' },
+        { value: '11', label: '11月 - 年度复盘月' },
+        { value: '12', label: '12月 - 年度总结月' }
+      ]},
+      { key: 'plan_name', label: '计划名称', type: 'text', required: true },
+      { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
+      { key: 'category', label: '类别', type: 'select', required: true, options: [
+        { value: 'strategic', label: '战略性事件' },
+        { value: 'operational', label: '运营性事件' },
+        { value: 'risk', label: '风险性事件' },
+        { value: 'opportunity', label: '机会性事件' },
+        { value: 'business', label: '业务性事件' },
+        { value: 'management', label: '管理性事件' },
+        { value: 'temporary', label: '临时性事件' }
+      ]},
+      { key: 'description', label: '计划描述', type: 'textarea', required: false }
+    ],
+    major_event: [
+      { key: 'year', label: '年份', type: 'select', required: true, options: [] },
+      { key: 'event_name', label: '事件名称', type: 'text', required: true },
+      { key: 'event_type', label: '事件类型', type: 'select', required: true, options: [
+        { value: 'strategic', label: '战略性事件' },
+        { value: 'operational', label: '运营性事件' },
+        { value: 'risk', label: '风险性事件' },
+        { value: 'opportunity', label: '机会性事件' }
+      ]},
+      { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
+      { key: 'event_date', label: '事件日期', type: 'date', required: false },
+      { key: 'description', label: '事件描述', type: 'textarea', required: false }
+    ],
+    monthly_progress: [
+      { key: 'year', label: '年度', type: 'select', required: true, options: [] },
+      { key: 'month', label: '月份', type: 'select', required: true, options: [
+        { value: '1', label: '1月' },
+        { value: '2', label: '2月' },
+        { value: '3', label: '3月' },
+        { value: '4', label: '4月' },
+        { value: '5', label: '5月' },
+        { value: '6', label: '6月' },
+        { value: '7', label: '7月' },
+        { value: '8', label: '8月' },
+        { value: '9', label: '9月' },
+        { value: '10', label: '10月' },
+        { value: '11', label: '11月' },
+        { value: '12', label: '12月' }
+      ]},
+      { key: 'task_name', label: '任务名称', type: 'text', required: true },
+      { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
+      { key: 'responsible_person', label: '负责人', type: 'text', required: true },
+      { key: 'key_activities', label: '关键活动', type: 'textarea', required: true },
+      { key: 'progress', label: '进度', type: 'number', required: false },
       { key: 'notes', label: '备注', type: 'textarea', required: false }
     ],
     action_plan: [
-      { key: 'what', label: 'What (做什么)', type: 'text', required: true },
-      { key: 'why', label: 'Why (为什么)', type: 'textarea', required: true },
-      { key: 'when', label: 'When (什么时候)', type: 'date', required: true },
-      { key: 'where', label: 'Where (在哪里)', type: 'text', required: true },
+      { key: 'year', label: '年份', type: 'select', required: true, options: [] },
+      { key: 'goal', label: '目标', type: 'textarea', required: true },
+      { key: 'start_date', label: '开始日期', type: 'date', required: true },
+      { key: 'end_date', label: '结束日期', type: 'date', required: true },
+      { key: 'what', label: 'What (做什么)', type: 'textarea', required: true },
       { key: 'who', label: 'Who (谁来做)', type: 'text', required: true },
       { key: 'how', label: 'How (怎么做)', type: 'textarea', required: true },
-      { key: 'how_much', label: 'How Much (多少钱)', type: 'number', required: true }
+      { key: 'value', label: '价值', type: 'textarea', required: true },
+      { key: 'budget', label: '投入预算', type: 'number', required: true },
+      { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
+      { key: 'priority', label: '优先级', type: 'select', required: true, options: [
+        { value: 'high', label: '高' },
+        { value: 'medium', label: '中' },
+        { value: 'low', label: '低' }
+      ]},
+      { key: 'why', label: 'Why (为什么)', type: 'textarea', required: false },
+      { key: 'where', label: 'Where (在哪里)', type: 'text', required: false }
     ]
   }
 
@@ -111,7 +189,7 @@ const TemplateSettings = () => {
       if (result.success) {
         setTemplates(result.data || [])
       } else {
-        console.error('加载模板失败:', result.message)
+        console.error('加载模板失败:', result.error)
         setTemplates([])
       }
     } catch (error) {
@@ -120,11 +198,23 @@ const TemplateSettings = () => {
     }
   }
 
+  // 表单验证
+  const validateForm = () => {
+    const errors = {}
+    if (!formData.name || formData.name.trim() === '') {
+      errors.name = '必填'
+    }
+    if (!formData.type || formData.type.trim() === '') {
+      errors.type = '必填'
+    }
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!formData.name || !formData.type) {
-      toast.error('请填写完整信息')
+    if (!validateForm()) {
       return
     }
 
@@ -149,7 +239,7 @@ const TemplateSettings = () => {
           toast.success('模板创建成功')
           loadTemplates()
         } else {
-          toast.error(result.message || '创建失败')
+          toast.error(result.error || '创建失败')
         }
       }
 
@@ -167,6 +257,7 @@ const TemplateSettings = () => {
       description: '',
       fields: []
     })
+    setFormErrors({})
     setEditingTemplate(null)
     setShowForm(false)
   }
@@ -212,15 +303,131 @@ const TemplateSettings = () => {
 
   const handleExport = (template) => {
     try {
-      const dataStr = JSON.stringify(template, null, 2)
-      const dataBlob = new Blob([dataStr], { type: 'application/json' })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${template.name}.json`
-      link.click()
-      URL.revokeObjectURL(url)
-      toast.success('模板导出成功')
+      const workbook = XLSX.utils.book_new()
+      const fields = template.fields || []
+
+      if (fields.length === 0) {
+        toast.error('模板没有字段，无法导出')
+        return
+      }
+
+      // 创建表头数组，必填字段加*标记
+      const headers = fields.map(field => (field.required ? `${field.label}*` : field.label))
+
+      // 创建一个空白的数据行作为示例
+      const emptyRow = fields.map(() => '')
+
+      // 第一行：提示说明
+      const tipRow = ['提示：红色带*的列为必填项']
+      // 补齐空列
+      for (let i = 1; i < fields.length; i++) {
+        tipRow.push('')
+      }
+
+      // 创建工作表数据
+      const wsData = [tipRow, headers]
+
+      // 添加几行空白行方便用户填写
+      for (let i = 0; i < 10; i++) {
+        wsData.push([...emptyRow])
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+      // 设置提示行样式（红色字体）
+      ws['A1'] = {
+        v: '提示：红色带*的列为必填项',
+        s: {
+          font: { color: { rgb: 'FF0000' }, bold: true },
+          alignment: { horizontal: 'left' }
+        }
+      }
+
+      // 设置表头样式
+      fields.forEach((field, index) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 1, c: index })
+        const headerText = field.required ? `${field.label}*` : field.label
+        if (field.required) {
+          // 必填字段：红色字体
+          ws[cellRef] = {
+            v: headerText,
+            s: {
+              font: { color: { rgb: 'FF0000' }, bold: true },
+              fill: { fgColor: { rgb: 'F0F0F0' } },
+              alignment: { horizontal: 'center' },
+              border: {
+                top: { style: 'thin', color: { rgb: '000000' } },
+                bottom: { style: 'thin', color: { rgb: '000000' } },
+                left: { style: 'thin', color: { rgb: '000000' } },
+                right: { style: 'thin', color: { rgb: '000000' } }
+              }
+            }
+          }
+        } else {
+          // 非必填字段：黑色字体
+          ws[cellRef] = {
+            v: headerText,
+            s: {
+              font: { bold: true },
+              fill: { fgColor: { rgb: 'F0F0F0' } },
+              alignment: { horizontal: 'center' },
+              border: {
+                top: { style: 'thin', color: { rgb: '000000' } },
+                bottom: { style: 'thin', color: { rgb: '000000' } },
+                left: { style: 'thin', color: { rgb: '000000' } },
+                right: { style: 'thin', color: { rgb: '000000' } }
+              }
+            }
+          }
+        }
+      })
+
+      // 设置列宽
+      const colWidths = fields.map(field => {
+        const labelLen = field.label.length * 2 + 4
+        return { wch: Math.max(labelLen, 15) }
+      })
+      ws['!cols'] = colWidths
+
+      // 合并提示行单元格
+      if (fields.length > 1) {
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: fields.length - 1 } }]
+      }
+
+      XLSX.utils.book_append_sheet(workbook, ws, '数据填写')
+
+      // 添加字段说明sheet，帮助用户了解每个字段的填写要求
+      const fieldGuide = fields.map(field => {
+        let optionsStr = ''
+        if (field.options && field.options.length > 0) {
+          optionsStr = field.options.map(opt => opt.label || opt.value).join('、')
+        }
+        return {
+          '字段名称': field.label,
+          '是否必填': field.required ? '是' : '否',
+          '字段类型': field.type === 'text' ? '文本' : 
+                     field.type === 'number' ? '数字' : 
+                     field.type === 'date' ? '日期' : 
+                     field.type === 'select' ? '下拉选择' : 
+                     field.type === 'textarea' ? '多行文本' : field.type,
+          '可选值': optionsStr,
+          '说明': field.description || ''
+        }
+      })
+      const guideSheet = XLSX.utils.json_to_sheet(fieldGuide)
+      guideSheet['!cols'] = [
+        { wch: 15 },
+        { wch: 10 },
+        { wch: 12 },
+        { wch: 40 },
+        { wch: 20 }
+      ]
+      XLSX.utils.book_append_sheet(workbook, guideSheet, '填写说明')
+
+      // 获取模板类型的中文名称
+      const typeLabel = templateTypes.find(t => t.value === template.type)?.label || template.type
+      XLSX.writeFile(workbook, `${typeLabel}_数据模板.xlsx`)
+      toast.success('数据模板导出成功')
     } catch (error) {
       console.error('导出失败:', error)
       toast.error('导出失败')
@@ -300,47 +507,61 @@ const TemplateSettings = () => {
             {/* 内容 */}
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="flex items-center text-sm font-semibold text-gray-800 mb-2">
-                    模板名称
-                    <span className="ml-1 text-red-500">*</span>
+                <div className="form-field-container">
+                  <label className="form-field-label">
+                    模板名称<span className="text-red-500 ml-1">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    required
-                  />
+                  <div className="form-field-input-wrapper">
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData({...formData, name: e.target.value})
+                        if (formErrors.name && e.target.value.trim()) {
+                          setFormErrors(prev => ({ ...prev, name: undefined }))
+                        }
+                      }}
+                      className="w-full px-3 py-2 border rounded-md transition-all duration-200 placeholder-gray-400 border-gray-300 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  {formErrors.name && <span className="text-red-500 text-xs mt-1 block">{formErrors.name}</span>}
                 </div>
-                <div>
-                  <label className="flex items-center text-sm font-semibold text-gray-800 mb-2">
-                    模板类型
-                    <span className="ml-1 text-red-500">*</span>
+                <div className="form-field-container">
+                  <label className="form-field-label">
+                    模板类型<span className="text-red-500 ml-1">*</span>
                   </label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    required
-                  >
-                    {templateTypes.map(type => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="form-field-input-wrapper">
+                    <select
+                      value={formData.type}
+                      onChange={(e) => {
+                        setFormData({...formData, type: e.target.value})
+                        if (formErrors.type && e.target.value.trim()) {
+                          setFormErrors(prev => ({ ...prev, type: undefined }))
+                        }
+                      }}
+                      className="w-full px-3 py-2 border rounded-md transition-all duration-200 placeholder-gray-400 border-gray-300 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {templateTypes.map(type => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {formErrors.type && <span className="text-red-500 text-xs mt-1 block">{formErrors.type}</span>}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-2">模板描述</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  rows="3"
-                />
+              <div className="form-field-container">
+                <label className="form-field-label">模板描述</label>
+                <div className="form-field-input-wrapper">
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    className="w-full px-3 py-2 border rounded-md transition-all duration-200 placeholder-gray-400 border-gray-300 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows="3"
+                  />
+                </div>
               </div>
 
               {formData.type && fieldMap[formData.type] && (

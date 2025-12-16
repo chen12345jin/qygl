@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../../utils/api'
 import { Save, Shield, Database, Bell, Wifi, Target, Plus, Edit, Trash2, X, RotateCcw, CheckCircle, Ban, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -93,6 +93,11 @@ const SystemSettings = () => {
   })
 
   const [activeTab, setActiveTab] = useState('system')
+  const [backupPage, setBackupPage] = useState(1)
+  const [backupPageSize, setBackupPageSize] = useState(10)
+  const [backupTotal, setBackupTotal] = useState(0)
+  const [selectedBackups, setSelectedBackups] = useState([])
+  const [batchDeleting, setBatchDeleting] = useState(false)
   const [errors, setErrors] = useState({
     system: {},
     security: {},
@@ -114,7 +119,14 @@ const SystemSettings = () => {
   })
 
   const formatBackupName = (name) => {
-    if (/^system-backup-.*\.json$/.test(name)) return 'system-backup.json'
+    if (/^system-backup-.*\.json$/.test(name)) {
+      // 提取日期时间信息进行格式化显示
+      const match = name.match(/system-backup-(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})\.json/)
+      if (match) {
+        return `${match[1]} ${match[2]}`
+      }
+      return '系统备份'
+    }
     if (/^\d{8}-\d{6}$/.test(name)) return '备份快照'
     return name
   }
@@ -229,7 +241,7 @@ const SystemSettings = () => {
       })
       const safeData = {
         system: {
-          systemName: systemRec?.value?.systemName || '企业目标管理系统',
+          systemName: systemRec?.value?.systemName || '企业年度规划系统',
           version: appVersion,
           language: systemRec?.value?.language || 'zh-CN',
           timezone: systemRec?.value?.timezone || 'Asia/Shanghai',
@@ -327,12 +339,112 @@ const SystemSettings = () => {
     }
   }
 
-  const loadBackups = async () => {
+  const loadBackups = async (page = backupPage, pageSize = backupPageSize) => {
     try {
-      const res = await api.get('/admin/backups')
+      const offset = (page - 1) * pageSize
+      const res = await api.get('/admin/backups', { params: { limit: pageSize, offset } })
       const items = res?.data?.items || []
+      const totalRaw = res?.data?.total
+      const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : (Array.isArray(items) ? items.length : 0)
       setBackups(items)
+      setBackupTotal(total)
+      setBackupPage(page)
+      setBackupPageSize(pageSize)
+      setSelectedBackups([]) // 刷新后清空选中
     } catch (e) {}
+  }
+
+  // 批量删除备份文件
+  const handleBatchDeleteBackups = async () => {
+    if (selectedBackups.length === 0) {
+      toast.error('请先选择要删除的备份文件')
+      return
+    }
+    if (!window.confirm(`确认删除选中的 ${selectedBackups.length} 个备份文件？此操作不可恢复！`)) return
+    
+    setBatchDeleting(true)
+    let successCount = 0
+    let failCount = 0
+    
+    for (const name of selectedBackups) {
+      try {
+        await api.delete(`/admin/backups/${encodeURIComponent(name)}`)
+        successCount++
+      } catch (err) {
+        failCount++
+      }
+    }
+    
+    setBatchDeleting(false)
+    setSelectedBackups([])
+    
+    if (failCount === 0) {
+      toast.success(`成功删除 ${successCount} 个备份文件`)
+    } else {
+      toast.error(`删除完成：成功 ${successCount} 个，失败 ${failCount} 个`)
+    }
+    
+    await loadBackups()
+  }
+
+  // 切换单个备份选中状态
+  const toggleBackupSelect = (name) => {
+    setSelectedBackups(prev => 
+      prev.includes(name) 
+        ? prev.filter(n => n !== name)
+        : [...prev, name]
+    )
+  }
+
+  // 全选/取消全选
+  const toggleSelectAllBackups = () => {
+    if (selectedBackups.length === backups.length) {
+      setSelectedBackups([])
+    } else {
+      setSelectedBackups(backups.map(b => b.name))
+    }
+  }
+
+  const handleRestoreBackup = async (name) => {
+    if (!name) return
+    if (!window.confirm(`确定要从备份文件 ${name} 恢复数据吗？此操作将覆盖当前系统数据，请谨慎操作。`)) return
+    try {
+      await api.post('/admin/backups/restore', { name })
+      toast.success('备份恢复成功，请刷新页面或重新登录后查看数据')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || '备份恢复失败')
+    }
+  }
+
+  const localBackupFileInputRef = useRef(null)
+
+  const handleLocalBackupFileChange = async (event) => {
+    const file = event.target.files && event.target.files[0]
+    if (!file) return
+
+    if (!/\.json$/i.test(file.name)) {
+      toast.error('请选择 JSON 格式的备份文件')
+      event.target.value = ''
+      return
+    }
+
+    if (!window.confirm(`确定要从本地备份文件 ${file.name} 恢复数据吗？此操作将覆盖当前系统数据，请谨慎操作。`)) {
+      event.target.value = ''
+      return
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      await api.post('/admin/backups/restore-upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      toast.success('备份恢复成功，请刷新页面或重新登录后查看数据')
+    } catch (err) {
+      toast.error(err?.response?.data?.error || '备份恢复失败')
+    } finally {
+      event.target.value = ''
+    }
   }
 
   const saveActiveSettings = async () => {
@@ -341,30 +453,36 @@ const SystemSettings = () => {
       toast.error('请先修正校验错误')
       return
     }
+    let loadingId
     try {
       setSaving(true)
-      const loadingId = toast.loading(activeTab === 'notification' ? '正在保存通知设置…' : '正在保存当前页面设置…')
+      loadingId = toast.loading(activeTab === 'notification' ? '正在保存通知设置…' : '正在保存当前页面设置…')
       let result
       const id = settingIds[activeTab]
       const payload = activeTab === 'system' ? { ...settings.system, version: appVersion } : settings[activeTab]
       if (id) {
-        result = await updateSystemSetting(id, { key: activeTab, value: payload }, true)
+        result = await updateSystemSetting(id, { key: activeTab, value: payload }, false)
       } else {
-        result = await addSystemSetting({ key: activeTab, value: payload }, true)
+        result = await addSystemSetting({ key: activeTab, value: payload }, false)
       }
       if (result.success) {
-        toast.success(activeTab === 'notification' ? '通知设置已保存' : '当前页面设置已保存')
+        toast.success(activeTab === 'notification' ? '通知设置已保存' : '当前页面设置已保存', { id: loadingId })
         if (activeTab === 'system') {
           applyLocalePrefs({ language: settings.system.language, timeZone: settings.system.timezone })
+          // 保存系统设置后，重新加载自动备份配置
+          try {
+            await api.post('/admin/backup/reload')
+          } catch (error) {
+            console.error('重新加载自动备份配置失败:', error)
+          }
         }
       } else {
-        toast.error(activeTab === 'notification' ? '保存通知设置失败' : '保存当前页面设置失败')
+        toast.error(activeTab === 'notification' ? '保存通知设置失败' : '保存当前页面设置失败', { id: loadingId })
       }
     } catch (error) {
-      toast.error(activeTab === 'notification' ? '保存通知设置失败' : '保存当前页面设置失败')
+      toast.error(activeTab === 'notification' ? '保存通知设置失败' : '保存当前页面设置失败', { id: loadingId })
       console.error('保存当前页面设置失败:', error)
     } finally {
-      toast.dismiss()
       setSaving(false)
     }
   }
@@ -375,9 +493,10 @@ const SystemSettings = () => {
 
   const resetSettings = async () => {
     if (window.confirm('确定要重置所有设置吗？此操作不可恢复。')) {
+      let loadingId
       try {
         setResetting(true)
-        const loadingId = toast.loading(activeTab === 'notification' ? '正在重置通知设置…' : '正在重置设置…')
+        loadingId = toast.loading(activeTab === 'notification' ? '正在重置通知设置…' : '正在重置设置…')
         // 重置为默认设置
         const defaultSettings = {
           system: {
@@ -420,12 +539,11 @@ const SystemSettings = () => {
         // 使用API保存默认设置
         await saveActiveSettings()
         setSettings(defaultSettings)
-        toast.success(activeTab === 'notification' ? '通知设置已重置为默认值' : '设置已重置')
+        toast.success(activeTab === 'notification' ? '通知设置已重置为默认值' : '设置已重置', { id: loadingId })
       } catch (error) {
         console.error('重置设置失败:', error)
-        toast.error(activeTab === 'notification' ? '重置通知设置失败' : '重置设置失败')
+        toast.error(activeTab === 'notification' ? '重置通知设置失败' : '重置设置失败', { id: loadingId })
       } finally {
-        toast.dismiss()
         setResetting(false)
       }
     }
@@ -688,8 +806,11 @@ const SystemSettings = () => {
             </label>
             <input
               type="number"
-              value={settings.system.backupInterval}
-              onChange={(e) => updateSetting('system', 'backupInterval', parseInt(e.target.value))}
+              value={Number.isFinite(settings.system.backupInterval) ? settings.system.backupInterval : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                updateSetting('system', 'backupInterval', v === '' ? '' : parseInt(v, 10))
+              }}
               className="form-input w-32"
               min="1"
               max="168"
@@ -729,8 +850,11 @@ const SystemSettings = () => {
           </label>
           <input
             type="number"
-            value={settings.security.passwordMinLength}
-            onChange={(e) => updateSetting('security', 'passwordMinLength', parseInt(e.target.value))}
+            value={Number.isFinite(settings.security.passwordMinLength) ? settings.security.passwordMinLength : ''}
+            onChange={(e) => {
+              const v = e.target.value
+              updateSetting('security', 'passwordMinLength', v === '' ? '' : parseInt(v, 10))
+            }}
             className="form-input"
             min="6"
             max="20"
@@ -744,8 +868,11 @@ const SystemSettings = () => {
           </label>
           <input
             type="number"
-            value={settings.security.sessionTimeout}
-            onChange={(e) => updateSetting('security', 'sessionTimeout', parseInt(e.target.value))}
+            value={Number.isFinite(settings.security.sessionTimeout) ? settings.security.sessionTimeout : ''}
+            onChange={(e) => {
+              const v = e.target.value
+              updateSetting('security', 'sessionTimeout', v === '' ? '' : parseInt(v, 10))
+            }}
             className="form-input"
             min="5"
             max="480"
@@ -759,8 +886,11 @@ const SystemSettings = () => {
           </label>
           <input
             type="number"
-            value={settings.security.maxLoginAttempts}
-            onChange={(e) => updateSetting('security', 'maxLoginAttempts', parseInt(e.target.value))}
+            value={Number.isFinite(settings.security.maxLoginAttempts) ? settings.security.maxLoginAttempts : ''}
+            onChange={(e) => {
+              const v = e.target.value
+              updateSetting('security', 'maxLoginAttempts', v === '' ? '' : parseInt(v, 10))
+            }}
             className="form-input"
             min="3"
             max="10"
@@ -806,21 +936,14 @@ const SystemSettings = () => {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-medium text-gray-700">审计日志</h3>
-            <p className="text-sm text-gray-500">记录用户操作日志</p>
+            <p className="text-sm text-gray-500">记录所有用户的所有操作日志（系统强制启用）</p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={settings.security.auditLog}
-              onChange={(e) => toggleAndToast('security', 'auditLog', e.target.checked, '审计日志')}
-              className="sr-only peer"
-              aria-label="审计日志"
-            />
-            <div className="w-12 h-7 bg-gray-300 rounded-full transition-colors peer-checked:bg-blue-600 relative">
-              <span className="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></span>
+          <div className="flex items-center">
+            <div className="w-12 h-7 bg-blue-600 rounded-full relative cursor-not-allowed">
+              <span className="absolute top-0.5 right-0.5 w-6 h-6 bg-white rounded-full shadow"></span>
             </div>
-            <span className={`ml-2 text-sm ${settings.security.auditLog ? 'text-blue-600' : 'text-gray-600'}`}>{settings.security.auditLog ? '已启用' : '已关闭'}</span>
-          </label>
+            <span className="ml-2 text-sm text-blue-600">始终启用</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1030,8 +1153,11 @@ const SystemSettings = () => {
             </label>
             <input
               type="number"
-              value={settings.integration.emailPort}
-              onChange={(e) => updateSetting('integration', 'emailPort', parseInt(e.target.value))}
+              value={Number.isFinite(settings.integration.emailPort) ? settings.integration.emailPort : ''}
+              onChange={(e) => {
+                const v = e.target.value
+                updateSetting('integration', 'emailPort', v === '' ? '' : parseInt(v, 10))
+              }}
               className="form-input"
             />
             {errors.integration.emailPort && <span className="text-red-500 text-sm mt-1 block">{errors.integration.emailPort}</span>}
@@ -1065,10 +1191,10 @@ const SystemSettings = () => {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-lg border border-blue-100">
         <div>
-          <h3 className="text-sm font-medium text-gray-700">数据库备份</h3>
-          <p className="text-sm text-gray-500">定期备份数据库</p>
+          <h3 className="text-sm font-medium text-gray-800">数据库备份与恢复</h3>
+          <p className="text-xs text-gray-500 mt-0.5">定期备份系统数据，必要时可从备份进行恢复</p>
         </div>
         <label className="relative inline-flex items-center cursor-pointer select-none">
           <input
@@ -1083,34 +1209,101 @@ const SystemSettings = () => {
           </div>
           <span className={`ml-2 text-sm ${settings.integration.databaseBackup ? 'text-blue-600' : 'text-gray-600'}`}>{settings.integration.databaseBackup ? '已启用' : '已关闭'}</span>
         </label>
-        <div className="flex items-center gap-3">
-          <button
-            className={`btn-primary inline-flex items-center ${!settings.integration.databaseBackup ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={!settings.integration.databaseBackup}
-            onClick={async () => {
-              try {
-                const res = await api.post('/admin/backup')
-                toast.success(`备份成功：${res.data?.path || '已保存至backups目录'}`)
-                await loadBackups()
-              } catch (err) {
-                toast.error('备份失败')
-              }
-            }}
-          >
-            <Database size={16} className="mr-2" />
-            立即备份
-          </button>
-        </div>
+      <div className="flex items-center gap-3">
+        <button
+          className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium shadow-sm bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200"
+          onClick={async () => {
+            try {
+              const res = await api.post('/admin/backup')
+              toast.success(`备份成功：${res.data?.path || '已保存至backups目录'}`)
+              await loadBackups()
+            } catch (err) {
+              toast.error('备份失败')
+            }
+          }}
+        >
+          <Database size={16} className="mr-2" />
+          立即备份
+        </button>
+        <button
+          type="button"
+          className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border border-emerald-500 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 hover:shadow-sm transform hover:-translate-y-0.5 transition-all duration-200"
+          onClick={() => {
+            if (localBackupFileInputRef.current) {
+              localBackupFileInputRef.current.click()
+            }
+          }}
+        >
+          <RotateCcw size={16} className="mr-2" />
+          数据恢复
+        </button>
+        <input
+          ref={localBackupFileInputRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={handleLocalBackupFileChange}
+        />
       </div>
-      <div className="mt-4 bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-700">备份文件</div>
-          <button className="btn-secondary" onClick={loadBackups}>刷新</button>
+      </div>
+      <div id="backup-section" className="mt-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
+          <div className="flex flex-col">
+            <div className="text-sm font-medium text-gray-700 whitespace-nowrap">备份文件</div>
+            <div className="text-xs text-gray-500 mt-0.5">可勾选多个备份进行批量删除，右侧可分页与刷新列表</div>
+          </div>
+          
+          {selectedBackups.length > 0 && (
+            <>
+              <div className="h-4 w-px bg-gray-200"></div>
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full border border-blue-100 transition-all duration-300 animate-in fade-in slide-in-from-left-4 whitespace-nowrap">
+                <CheckCircle size={12} />
+                已选中 {selectedBackups.length} 项
+              </span>
+            </>
+          )}
+
+          <div className="flex-1"></div>
+
+          <div className="flex items-center gap-2">
+            <button 
+              className="group flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg shadow-md hover:from-red-600 hover:to-red-700 hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 font-medium text-sm disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none animate-in fade-in slide-in-from-left-4 whitespace-nowrap"
+              onClick={handleBatchDeleteBackups}
+              disabled={batchDeleting || selectedBackups.length === 0}
+            >
+              {batchDeleting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Trash2 size={16} className="group-hover:scale-110 transition-transform duration-200" />
+              )}
+              <span>批量删除</span>
+            </button>
+            <select
+              className="form-select w-24 text-sm py-1.5"
+              value={backupPageSize}
+              onChange={(e) => loadBackups(1, parseInt(e.target.value))}
+              title="每页数量"
+            >
+              <option value={10}>10/页</option>
+              <option value={20}>20/页</option>
+              <option value={50}>50/页</option>
+            </select>
+            <button className="btn-secondary whitespace-nowrap" onClick={() => loadBackups()}>刷新</button>
+          </div>
         </div>
         <div className="p-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50">
+                <th className="px-3 py-2 text-center text-gray-700 w-12">
+                  <input
+                    type="checkbox"
+                    checked={backups.length > 0 && selectedBackups.length === backups.length}
+                    onChange={toggleSelectAllBackups}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    title="全选/取消全选"
+                  />
+                </th>
                 <th className="px-3 py-2 text-left text-gray-700">文件名</th>
                 <th className="px-3 py-2 text-left text-gray-700">更新时间</th>
                 <th className="px-3 py-2 text-right text-gray-700">大小</th>
@@ -1119,24 +1312,65 @@ const SystemSettings = () => {
             </thead>
             <tbody>
               {(Array.isArray(backups) ? backups : []).map((b) => (
-                <tr key={b.name} className="border-t">
+                <tr key={b.name} className={`border-t ${selectedBackups.includes(b.name) ? 'bg-blue-50' : ''}`}>
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedBackups.includes(b.name)}
+                      onChange={() => toggleBackupSelect(b.name)}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-3 py-2 text-gray-800">
                     <span className="inline-block max-w-[360px] truncate" title={b.name}>{formatBackupName(b.name)}</span>
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDateTime(b.mtime)}</td>
                   <td className="px-3 py-2 text-right text-gray-600">{(b.size/1024).toFixed(1)} KB</td>
                   <td className="px-3 py-2 text-center">
-                    <a className="btn-primary" href={b.url} target="_blank" rel="noreferrer">下载</a>
+                    <div className="inline-flex items-center gap-2 justify-center">
+                      <a className="btn-secondary" href={b.url} target="_blank" rel="noreferrer" title="下载备份文件到本地">下载</a>
+                      <button
+                        className="btn-danger"
+                        title="删除"
+                        onClick={async () => {
+                          if (!window.confirm(`确认删除备份文件 ${b.name}？`)) return
+                          try {
+                            await api.delete(`/admin/backups/${encodeURIComponent(b.name)}`)
+                            toast.success('删除成功')
+                            await loadBackups()
+                          } catch (err) {
+                            toast.error('删除失败')
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
               {(!backups || backups.length === 0) && (
                 <tr>
-                  <td className="px-3 py-6 text-center text-gray-500" colSpan={4}>暂无备份文件</td>
+                  <td className="px-3 py-6 text-center text-gray-500" colSpan={5}>暂无备份文件</td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+          <div className="text-sm text-gray-600">共 {backupTotal} 项，当前第 {backupPage} 页</div>
+          <div className="flex items-center gap-2">
+            <button
+              className="btn-secondary"
+              disabled={backupPage <= 1}
+              onClick={() => loadBackups(backupPage - 1, backupPageSize)}
+            >上一页</button>
+            <button
+              className="btn-secondary"
+              disabled={backupPage * backupPageSize >= backupTotal}
+              onClick={() => loadBackups(backupPage + 1, backupPageSize)}
+            >下一页</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1427,9 +1661,8 @@ const SystemSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <PageHeaderBanner title="系统设置" subTitle="系统设置的年度工作落地规划" />
+    <div className="space-y-6">
+      <PageHeaderBanner title="系统设置" subTitle="系统设置的年度工作落地规划" />
 
         {/* 标签页导航 */}
         <div className="bg-gradient-to-r from-white to-blue-50 rounded-xl shadow-lg border border-white/50 mb-6 overflow-hidden">
@@ -1455,12 +1688,11 @@ const SystemSettings = () => {
         </div>
 
         {/* 标签页内容 */}
-        <div className="p-6">
-          <div className="bg-gradient-to-br from-white to-blue-50 rounded-xl shadow-lg border border-white/50 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6">
             {renderContent()}
           </div>
         </div>
-      </div>
       
       {/* 删除确认对话框 */}
       <DeleteConfirmDialog

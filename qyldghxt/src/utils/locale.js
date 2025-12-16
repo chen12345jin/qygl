@@ -16,7 +16,30 @@ export const applyLocalePrefs = (prefs) => {
   const safe = { ...(detectDefaults()), ...(prefs || {}) }
   try { if (typeof window !== 'undefined') window.APP_LOCALE = safe } catch {}
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(safe)) } catch {}
+  try { if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = String(safe.language || '') } catch {}
+  try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('localeChanged', { detail: safe })) } catch {}
   return safe
+}
+
+export const formatNumber = (value, opts = {}) => {
+  const n = Number(value || 0)
+  const { language } = getLocalePrefs()
+  try {
+    return new Intl.NumberFormat(language, opts).format(n)
+  } catch {
+    return String(n)
+  }
+}
+
+export const formatCurrency = (value, currency = 'CNY', opts = {}) => {
+  const n = Number(value || 0)
+  const { language } = getLocalePrefs()
+  const options = { style: 'currency', currency, ...opts }
+  try {
+    return new Intl.NumberFormat(language, options).format(n)
+  } catch {
+    return `${n}`
+  }
 }
 
 export const getLocalePrefs = () => {

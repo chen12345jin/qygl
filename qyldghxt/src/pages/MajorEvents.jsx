@@ -2,26 +2,36 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import TableManager from '../components/TableManager'
 import { useData } from '../contexts/DataContext'
-import { AlertTriangle, Filter, RefreshCcw, Download, Upload, Plus, X, Trash2 } from 'lucide-react'
+import { AlertTriangle, Filter, RefreshCcw, Download, Upload, Plus, X, Trash2, FileText } from 'lucide-react'
 import PageHeaderBanner from '../components/PageHeaderBanner'
 import { exportToExcel } from '../utils/export'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
+import PrintPreview from '../components/PrintPreview'
+import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
+import CustomSelect from '../components/CustomSelect'
 
 const MajorEvents = () => {
-  const { getMajorEvents, addMajorEvent, updateMajorEvent, deleteMajorEvent, getDepartments, getSystemSettings, addSystemSetting, updateSystemSetting } = useData()
+  const { globalYear, setGlobalYear, getMajorEvents, addMajorEvent, updateMajorEvent, deleteMajorEvent, getDepartments, getSystemSettings, addSystemSetting, updateSystemSetting } = useData()
   const { year: yearParam } = useParams()
   const [events, setEvents] = useState([])
   const [departments, setDepartments] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [filters, setFilters] = useState({
-    year: new Date().getFullYear(),
+    year: globalYear,
+    month: '',
     event_type: '',
     importance: '',
-    status: ''
+    status: '',
+    responsible_department: ''
   })
+
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, year: globalYear }))
+  }, [globalYear])
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [years, setYears] = useState([2024, 2025, 2026])
   const [showYearModal, setShowYearModal] = useState(false)
@@ -36,6 +46,19 @@ const MajorEvents = () => {
   const importInputRef = useRef(null)
   const filterAnchorRef = useRef(null)
   const [filterPos, setFilterPos] = useState({ left: 0, top: 0 })
+
+  useEffect(() => {
+    const handler = (e) => {
+      const d = e.detail || {}
+      if (d.room === 'majorEvents') {
+        if (!d.year || d.year === filters.year) {
+          loadEvents()
+        }
+      }
+    }
+    window.addEventListener('dataUpdated', handler)
+    return () => window.removeEventListener('dataUpdated', handler)
+  }, [filters.year])
 
   useEffect(() => {
     loadEvents()
@@ -58,7 +81,7 @@ const MajorEvents = () => {
         if (!yearParam && currentYearSetting && (typeof currentYearSetting.value === 'number' || typeof currentYearSetting.value === 'string')) {
           const y = parseInt(currentYearSetting.value)
           if (!isNaN(y)) {
-            setFilters(prev => ({ ...prev, year: y }))
+            setGlobalYear(y)
             setCurrentYearSettingId(currentYearSetting.id)
           }
         }
@@ -71,7 +94,7 @@ const MajorEvents = () => {
     if (yearParam) {
       const y = parseInt(yearParam)
       if (!isNaN(y)) {
-        setFilters(prev => ({ ...prev, year: y }))
+        setGlobalYear(y)
       }
     }
   }, [yearParam])
@@ -108,10 +131,27 @@ const MajorEvents = () => {
   const loadEvents = async () => {
     const result = await getMajorEvents(filters)
     if (result.success) {
-      const list = (result.data || []).map(e => ({
-        ...e,
-        responsible_department: e.responsible_department || e.department_name || e.department || ''
-      }))
+      const list = (result.data || []).map(e => {
+        // 自动计算进度：实际成本 / 预算 * 100%
+        const actualCost = parseFloat(e.actual_cost) || 0
+        const budget = parseFloat(e.budget) || 0
+        let progress = 0
+        if (budget > 0 && !isNaN(actualCost)) {
+          progress = (actualCost / budget) * 100
+        }
+        progress = parseFloat(progress.toFixed(2))
+        const normalizedProgress = normalizeProgress(progress)
+        
+        // 计算状态
+        const status = computeStatus(normalizedProgress, e.planned_date)
+        
+        return {
+          ...e,
+          responsible_department: e.responsible_department || e.department_name || e.department || '',
+          progress: normalizedProgress,
+          status
+        }
+      })
       setEvents(list)
     }
   }
@@ -123,22 +163,82 @@ const MajorEvents = () => {
     }
   }
 
+  const computeStatus = (progress, when) => computeActionPlanStatus(progress, when)
+
+  const renderStatusBadge = (progress, when) => {
+    const v = computeStatus(progress, when)
+    const p = normalizeProgress(progress)
+    
+    let statusText = '未开始'
+    let colorClass = ''
+    
+    if (p === 100) {
+      colorClass = 'bg-blue-100 text-blue-800'
+      statusText = '已完成'
+    } else if (p > 75) {
+      colorClass = 'bg-emerald-100 text-emerald-800'
+      statusText = '即将完成'
+    } else if (p > 50) {
+      colorClass = 'bg-orange-100 text-orange-800'
+      statusText = '接近完成'
+    } else if (p > 25) {
+      colorClass = 'bg-lime-100 text-lime-800'
+      statusText = '进行中'
+    } else if (p > 0) {
+      colorClass = 'bg-green-50 text-green-700'
+      statusText = '初始'
+    } else {
+      colorClass = 'bg-white border border-gray-200 text-gray-500'
+      statusText = '未开始'
+    }
+    
+    // 如果延期且未完成，在文本后添加提示，但保持进度颜色
+    if (v === 'delayed') {
+       statusText += ' (延期)'
+    }
+
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-xs ${colorClass}`}>
+        {statusText}
+      </span>
+    )
+  }
+
   const handleAdd = async (data) => {
     // 找到选中的部门信息
     const selectedDept = departments.find(dept => dept.name === data.responsible_department)
     
     // 如果没有选择部门，显示错误
     if (!selectedDept) {
-      alert('请选择负责部门')
+      toast.error('请选择负责部门')
       return false
     }
+    
+    // 自动计算进度：实际成本 / 预算 * 100%
+    const actualCost = parseFloat(data.actual_cost) || 0
+    const budget = parseFloat(data.budget) || 0
+    let progress = 0
+    if (budget > 0 && !isNaN(actualCost)) {
+      progress = (actualCost / budget) * 100
+    }
+    progress = parseFloat(progress.toFixed(2))
+    const normalizedProgress = normalizeProgress(progress)
+    
+    // 计算状态
+    const status = computeStatus(normalizedProgress, data.planned_date)
     
     const eventData = {
       ...data,
       year: Number(data.year || filters.year),
       department_id: selectedDept.id,
       // 保留名称以便前端显示
-      responsible_department: selectedDept.name
+      responsible_department: selectedDept.name,
+      expected_result: data.expected_result ? parseFloat(data.expected_result) : null,
+      actual_result: data.actual_result ? parseFloat(data.actual_result) : null,
+      budget: data.budget ? parseFloat(data.budget) : null,
+      actual_cost: data.actual_cost ? parseFloat(data.actual_cost) : null,
+      progress: normalizedProgress,
+      status
     }
     const result = await addMajorEvent(eventData)
     if (result.success) {
@@ -156,15 +256,34 @@ const MajorEvents = () => {
     
     // 如果没有选择部门，显示错误
     if (!selectedDept) {
-      alert('请选择负责部门')
+      toast.error('请选择负责部门')
       return false
     }
+    
+    // 自动计算进度：实际成本 / 预算 * 100%
+    const actualCost = parseFloat(data.actual_cost) || 0
+    const budget = parseFloat(data.budget) || 0
+    let progress = 0
+    if (budget > 0 && !isNaN(actualCost)) {
+      progress = (actualCost / budget) * 100
+    }
+    progress = parseFloat(progress.toFixed(2))
+    const normalizedProgress = normalizeProgress(progress)
+    
+    // 计算状态
+    const status = computeStatus(normalizedProgress, data.planned_date)
     
     const eventData = {
       ...data,
       department_id: selectedDept.id,
       // 保留名称以便前端显示
-      responsible_department: selectedDept.name
+      responsible_department: selectedDept.name,
+      expected_result: data.expected_result ? parseFloat(data.expected_result) : null,
+      actual_result: data.actual_result ? parseFloat(data.actual_result) : null,
+      budget: data.budget ? parseFloat(data.budget) : null,
+      actual_cost: data.actual_cost ? parseFloat(data.actual_cost) : null,
+      progress: normalizedProgress,
+      status
     }
     const result = await updateMajorEvent(id, eventData)
     if (result.success) {
@@ -196,32 +315,48 @@ const MajorEvents = () => {
     handleAdd(newData)
   }
 
+  const getFilterCount = () => {
+    let count = 0
+    if (filters.event_type) count++
+    if (filters.importance) count++
+    if (filters.month) count++
+    if (filters.responsible_department) count++
+    if (filters.status) count++
+    return count
+  }
+  const filterCount = getFilterCount()
+
   const handleExportToExcel = () => {
-    try {
-      if (!events || events.length === 0) {
-        toast('当前没有可导出的数据', { icon: 'ℹ️' })
-        return
-      }
-      const exportData = events.map(e => ({
-        year: e.year,
-        event_name: e.event_name,
-        event_type: e.event_type,
-        importance: e.importance,
-        planned_date: e.planned_date,
-        actual_date: e.actual_date,
-        responsible_department: e.responsible_department,
-        responsible_person: e.responsible_person,
-        status: e.status,
-        budget: e.budget,
-        actual_cost: e.actual_cost,
-        description: e.description
-      }))
-      exportToExcel(exportData, `大事件提炼_${filters.year}年`, '大事件提炼', 'majorEvents')
-      toast.success(`已导出 ${exportData.length} 条到 Excel`)
-    } catch (error) {
-      console.error('导出Excel失败:', error)
-      toast.error('导出失败，请稍后重试')
+    if (!events || events.length === 0) {
+      toast('当前没有可导出的数据', { icon: 'ℹ️' })
+      return
     }
+
+    const toastId = toast.loading('正在导出数据...', { duration: 0 })
+
+    setTimeout(() => {
+      try {
+        const exportData = events.map(e => ({
+          year: e.year,
+          event_name: e.event_name,
+          event_type: e.event_type,
+          importance: e.importance,
+          planned_date: e.planned_date,
+          actual_date: e.actual_date,
+          responsible_department: e.responsible_department,
+          responsible_person: e.responsible_person,
+          status: e.status,
+          budget: e.budget,
+          actual_cost: e.actual_cost,
+          description: e.description
+        }))
+        exportToExcel(exportData, `大事件提炼_${filters.year}年`, '大事件提炼', 'majorEvents')
+        toast.success(`已导出 ${exportData.length} 条到 Excel`, { id: toastId })
+      } catch (error) {
+        console.error('导出Excel失败:', error)
+        toast.error('导出失败，请稍后重试', { id: toastId })
+      }
+    }, 100)
   }
 
   const handleImportFromExcel = async (file) => {
@@ -251,6 +386,7 @@ const MajorEvents = () => {
               responsible_department: row.responsible_department || row.负责部门 || '',
               responsible_person: row.responsible_person || row.负责人 || '',
               status: row.status || row.状态 || '',
+              progress: (row.progress ?? row['进度（%）'] ?? row['进度']) || '',
               budget: (row.budget ?? row['预算（万元）'] ?? row['预算']) || '',
               actual_cost: (row.actual_cost ?? row['实际成本（万元）'] ?? row['实际成本']) || '',
               description: row.description || row.事件描述 || '',
@@ -276,6 +412,12 @@ const MajorEvents = () => {
   }
 
   const columns = useMemo(() => {
+    const determineStatus = (rate) => {
+      if (rate >= 100) return 'completed'
+      if (rate > 0) return 'executing'
+      return 'planning'
+    }
+
     const base = [
       { 
         key: 'year', 
@@ -337,97 +479,57 @@ const MajorEvents = () => {
       },
       { 
         key: 'planned_date', 
-        label: '计划月份', 
-        type: 'select',
-        options: Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` })),
-        valueParser: (v) => {
-          if (!v) return ''
-          try { return new Date(v).getMonth() + 1 } catch (_) { return '' }
-        },
-        onChange: (month, setFormData, form) => {
-          const y = filters.year || new Date().getFullYear()
-          const m = String(month).padStart(2, '0')
-          setFormData({ ...form, planned_date: `${y}-${m}-01` })
-        },
-        headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200',
-        render: (value) => {
-          const m = value ? (new Date(value).getMonth() + 1) : null
-          if (!m) return '-';
-          return (
-            <div className="flex items-center space-x-3">
-              <div className={`${filters.year === 2025 ? 'w-6 h-6' : 'w-8 h-8'} bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center shadow-sm`}>
-                <span className="text-white text-xs font-bold">{m}</span>
-              </div>
-              <span className="font-bold">{m}月</span>
-            </div>
-          )
-        }
+        label: '计划日期', 
+        type: 'date', 
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200'
       },
       { 
         key: 'actual_date', 
-        label: '实际月份', 
-        type: 'select',
-        options: Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` })),
-        valueParser: (v) => {
-          if (!v) return ''
-          try { return new Date(v).getMonth() + 1 } catch (_) { return '' }
-        },
-        onChange: (month, setFormData, form) => {
-          const y = filters.year || new Date().getFullYear()
-          const m = String(month).padStart(2, '0')
-          setFormData({ ...form, actual_date: `${y}-${m}-01` })
-        },
-        headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200',
-        render: (value) => {
-          const m = value ? (new Date(value).getMonth() + 1) : null
-          if (!m) return '-';
-          return (
-            <div className="flex items-center space-x-3">
-              <div className={`${filters.year === 2025 ? 'w-6 h-6' : 'w-8 h-8'} bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center shadow-sm`}>
-                <span className="text-white text-xs font-bold">{m}</span>
-              </div>
-              <span className="font-bold">{m}月</span>
-            </div>
-          )
-        }
+        label: '实际日期', 
+        type: 'date', 
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200'
       },
       { 
         key: 'responsible_department', 
         label: '负责部门', 
         type: 'select',
-        options: departments.map(dept => ({ value: dept.name, label: dept.name })),
+        options: departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name })),
         required: true,
         headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200'
       },
       { key: 'responsible_person', label: '负责人', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' },
+      { key: 'budget', label: '预算（万元）', type: 'number', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200', onChange: (value, setFormData, formData) => { const budget = parseFloat(value) || 0; const actualCost = parseFloat(formData.actual_cost) || 0; let progress = 0; if (budget > 0 && !isNaN(actualCost)) { progress = (actualCost / budget) * 100; } progress = parseFloat(progress.toFixed(2)); const normalizedProgress = normalizeProgress(progress); const next = { ...formData, budget: value, progress: normalizedProgress }; const status = computeStatus(normalizedProgress, formData.planned_date); setFormData({ ...next, status }); } },
+      { key: 'actual_cost', label: '实际成本（万元）', type: 'number', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200', onChange: (value, setFormData, formData) => { const actualCost = parseFloat(value) || 0; const budget = parseFloat(formData.budget) || 0; let progress = 0; if (budget > 0 && !isNaN(actualCost)) { progress = (actualCost / budget) * 100; } progress = parseFloat(progress.toFixed(2)); const normalizedProgress = normalizeProgress(progress); const next = { ...formData, actual_cost: value, progress: normalizedProgress }; const status = computeStatus(normalizedProgress, formData.planned_date); setFormData({ ...next, status }); } },
+      { 
+        key: 'progress', 
+        label: '进度（%）', 
+        type: 'number', 
+        required: filters.year !== 2025,
+        disabled: true,
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-teal-100 to-teal-200 border-b border-gray-200 sticky top-0 z-10'
+      },
       { 
         key: 'status', 
         label: '状态', 
-        type: 'select',
+        type: 'custom',
+        required: false,
         options: [
-          { value: 'planning', label: '规划中' },
-          { value: 'preparing', label: '准备中' },
-          { value: 'executing', label: '执行中' },
+          { value: 'not_started', label: '未开始' },
+          { value: 'in_progress', label: '进行中' },
           { value: 'completed', label: '已完成' },
-          { value: 'cancelled', label: '已取消' }
+          { value: 'delayed', label: '延期' }
         ],
-        headerClassName: 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200',
-        render: (value) => (
-          <span className={`px-2 py-1 rounded-full text-xs ${
-            value === 'completed' ? 'bg-green-100 text-green-800' :
-            value === 'executing' ? 'bg-blue-100 text-blue-800' :
-            value === 'cancelled' ? 'bg-red-100 text-red-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {value === 'completed' ? '已完成' :
-             value === 'executing' ? '执行中' :
-             value === 'preparing' ? '准备中' :
-             value === 'cancelled' ? '已取消' : '规划中'}
-          </span>
-        )
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200 sticky top-0 z-10',
+        render: (value, item) => renderStatusBadge(item?.progress, item?.planned_date),
+        customField: ({ formData }) => (
+          <div className="flex flex-col space-y-1">
+            <div className="h-10 flex items-center">
+              {renderStatusBadge(formData?.progress, formData?.planned_date)}
+            </div>
+          </div>
+        ),
+        disabled: true
       },
-      { key: 'budget', label: '预算（万元）', type: 'number', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' },
-      { key: 'actual_cost', label: '实际成本（万元）', type: 'number', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' },
       { key: 'description', label: '事件描述', type: 'textarea', headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200' },
       { key: 'key_points', label: '关键要点', type: 'textarea', headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200' },
       { key: 'success_criteria', label: '成功标准', type: 'textarea', headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200' },
@@ -435,10 +537,17 @@ const MajorEvents = () => {
       { key: 'lessons_learned', label: '经验教训', type: 'textarea', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' }
     ]
 
-    if (filters.year === 2025) {
-      return base.map(c => ({ ...c, required: true }))
-    }
-    return base
+    // 默认所有字段必填，除了状态和进度
+    const allRequired = base.map(c => ({ ...c, required: (c.key === 'status' || c.key === 'progress') ? false : true }))
+
+    // 所有年份，实际相关字段非必填
+    const optionalKeys = ['actual_date', 'actual_cost', 'description', 'key_points', 'success_criteria', 'risks', 'lessons_learned']
+    return allRequired.map(c => {
+      if (optionalKeys.includes(c.key)) {
+        return { ...c, required: false }
+      }
+      return c
+    })
   }, [filters.year, departments, years, editingId])
 
   return (
@@ -447,7 +556,7 @@ const MajorEvents = () => {
         title="大事件提炼"
         subTitle="制定和管理企业年度工作计划的具体落地实施方案"
         year={filters.year}
-        onYearChange={(y)=>{ setYearChangeByUser(true); setFilters({ ...filters, year: y }) }}
+        onYearChange={(y)=>{ setYearChangeByUser(true); setGlobalYear(y) }}
         years={years}
         onAddYear={() => setShowYearModal(true)}
         right={null}
@@ -478,9 +587,13 @@ const MajorEvents = () => {
         </div>
       </div>
 
+      <div className="unified-table-wrapper">
       <TableManager
         title={`${filters.year}年度大事件记录`}
         addHeader={`新增${filters.year}年度大事件记录`}
+        addHeaderRight={(
+          <div className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-semibold">{filters.year}年</div>
+        )}
         addSubHeader="请填写必填项（*），确保事件信息准确"
         data={events}
         columns={columns}
@@ -493,25 +606,31 @@ const MajorEvents = () => {
         showActions={true}
         headerEllipsis={filters.year === 2025}
         ellipsisAll={false}
-        tableClassName={`${filters.year === 2025 ? 'min-w-[2200px]' : ''} table-compact table-excel-borders`}
-        tableContainerClassName={`${filters.year === 2025 ? 'overflow-x-auto overflow-y-auto max-h-[70vh]' : ''}`}
-        stickyHeader={filters.year === 2025}
+        tableClassName="unified-data-table"
+        tableContainerClassName="unified-table-scroll"
+        stickyHeader={true}
         stickyHeaderBgClass="bg-white"
         actionsHeaderClassName="text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200"
         medium={filters.year === 2025}
-        singleLineNoEllipsis={false}
+        singleLineNoEllipsis={true}
         headerActionsLeft={(
-          <div className="flex items-center gap-2 mr-2 relative">
+          <div className="flex flex-wrap items-center gap-2 mr-2 relative">
             <button
-              className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2"
+              className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 relative"
               onClick={() => setIsFilterOpen(v => !v)}
             >
               <Filter size={14} />
               <span>筛选</span>
+              {filterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center border border-white">
+                  {filterCount}
+                </span>
+              )}
             </button>
             <button
-              className="px-3 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2"
-              onClick={() => { setFilters({ ...filters, event_type: '', importance: '', status: '' }); setIsFilterOpen(false); loadEvents() }}
+              className={`px-3 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2 ${!(filters.event_type || filters.importance || filters.month || filters.responsible_department || filters.status) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => { setFilters(prev => ({ ...prev, month: '', event_type: '', importance: '', status: '', responsible_department: '' })); setIsFilterOpen(false); loadEvents() }}
+              disabled={!(filters.event_type || filters.importance || filters.month || filters.responsible_department || filters.status)}
             >
               <RefreshCcw size={14} />
               <span>重置</span>
@@ -525,6 +644,14 @@ const MajorEvents = () => {
             >
               <Download size={14} />
               <span>导出Excel</span>
+            </button>
+            <button
+              className={`px-3 py-2 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-lg font-semibold hover:from-rose-600 hover:to-pink-700 transition-all duration-300 shadow-md flex items-center space-x-2 ${events.length===0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => setShowPrintPreview(true)}
+              disabled={events.length===0}
+            >
+              <FileText size={14} />
+              <span>导出PDF</span>
             </button>
             <button
               className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-lg font-semibold hover:from-indigo-600 hover:to-violet-700 transition-all duration-300 shadow-md flex items-center space-x-2"
@@ -546,7 +673,7 @@ const MajorEvents = () => {
         triggerAdd={addTrigger}
         triggerPrefill={addPrefill}
         addMode="modal"
-        prefill={{ year: filters.year }}
+        prefill={{ year: filters.year, progress: 0 }}
         pagination={{
           page,
           pageSize,
@@ -569,20 +696,6 @@ const MajorEvents = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filters.year !== 2025 && (
-                <div>
-                  <label htmlFor="panel-year" className="block text-sm font-medium text-gray-700 mb-1">年度</label>
-                  <select id="panel-year" name="year"
-                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                    value={filters.year}
-                    onChange={(e) => setFilters({ ...filters, year: parseInt(e.target.value) })}
-                  >
-                    {years.map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div>
                 <label htmlFor="panel-type" className="block text-sm font-medium text-gray-700 mb-1">事件类型</label>
                 <select id="panel-type" name="event_type"
@@ -612,6 +725,44 @@ const MajorEvents = () => {
                 </select>
               </div>
               <div>
+                <label htmlFor="panel-month" className="block text-sm font-medium text-gray-700 mb-1">月份</label>
+                <CustomSelect
+                  value={filters.month}
+                  onChange={(value) => setFilters({ ...filters, month: value })}
+                  options={[
+                    { value: '', label: '全部月份' },
+                    { value: '1', label: '1月' },
+                    { value: '2', label: '2月' },
+                    { value: '3', label: '3月' },
+                    { value: '4', label: '4月' },
+                    { value: '5', label: '5月' },
+                    { value: '6', label: '6月' },
+                    { value: '7', label: '7月' },
+                    { value: '8', label: '8月' },
+                    { value: '9', label: '9月' },
+                    { value: '10', label: '10月' },
+                    { value: '11', label: '11月' },
+                    { value: '12', label: '12月' }
+                  ]}
+                  className="focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="panel-department" className="block text-sm font-medium text-gray-700 mb-1">负责部门</label>
+                <CustomSelect
+                  value={filters.responsible_department}
+                  onChange={(value) => setFilters({ ...filters, responsible_department: value })}
+                  options={[
+                    { value: '', label: '全部部门' },
+                    ...departments.filter(d => !d.name.includes('公司')).map(dept => ({
+                      value: dept.name,
+                      label: dept.name
+                    }))
+                  ]}
+                  className="focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+              <div>
                 <label htmlFor="panel-status" className="block text-sm font-medium text-gray-700 mb-1">状态</label>
                 <select id="panel-status" name="status"
                   className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white transition-all duration-200 text-sm"
@@ -631,6 +782,7 @@ const MajorEvents = () => {
           </div>
         )}
       </TableManager>
+      </div>
       
       {showYearModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6">
@@ -673,11 +825,11 @@ const MajorEvents = () => {
                       if (!v) { setYearError('请输入有效年份（1900-2100）'); return }
                       const n = parseInt(v)
                       if (isNaN(n) || n < 1900 || n > 2100) { setYearError('请输入有效年份（1900-2100）'); return }
-                      if (years.includes(n)) { setYearError('年份已存在'); setFilters(prev=>({ ...prev, year: n })); return }
+                      if (years.includes(n)) { setYearError('年份已存在'); setGlobalYear(n); return }
                       const next = [...years, n].sort((a,b)=>a-b)
                       setYears(next)
                       persistYears(next)
-                      setFilters(prev=>({ ...prev, year: n }))
+                      setGlobalYear(n)
                       persistSelectedYear(n)
                       setNewYear('')
                       setYearError('')
@@ -697,14 +849,14 @@ const MajorEvents = () => {
                       <span className="text-sm text-gray-800 whitespace-nowrap">{y}年</span>
                       {filters.year === y
                         ? <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">当前</span>
-                        : <button className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-nowrap" onClick={() => { setFilters(prev => ({ ...prev, year: y })); persistSelectedYear(y, true) }}>设为当前</button>}
+                        : <button className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-nowrap" onClick={() => { setGlobalYear(y); persistSelectedYear(y, true) }}>设为当前</button>}
                       <button
                         onClick={() => {
                           const next = years.filter(v=>v!==y)
                           const fallback = next[next.length-1] || new Date().getFullYear()
                           if (next.length === 0) { setYears([fallback]); persistYears([fallback]) }
                           else { setYears(next); persistYears(next) }
-                          if (filters.year===y) { setFilters(prev => ({ ...prev, year: fallback })); persistSelectedYear(fallback, true) }
+                          if (filters.year===y) { setGlobalYear(fallback); persistSelectedYear(fallback, true) }
                         }}
                         className="p-1 rounded-full bg-red-50 text-red-600 hover:bg-red-100"
                         title="删除"
@@ -722,6 +874,18 @@ const MajorEvents = () => {
           </div>
         </div>
       )}
+
+      {/* PDF打印预览 */}
+      <PrintPreview
+        isOpen={showPrintPreview}
+        onClose={() => setShowPrintPreview(false)}
+        title={`${filters.year}年度大事件提炼`}
+        data={events}
+        columns={columns}
+        filename={`大事件提炼_${filters.year}年`}
+        pageType="majorEvents"
+        year={filters.year}
+      />
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { formatDateTime } from '../../utils/locale.js'
 
 const Notifications = () => {
   const navigate = useNavigate()
-  const { getNotifications } = useData()
+  const { getNotifications, updateNotification, deleteNotification } = useData()
   const [notifications, setNotifications] = useState([])
 
   useEffect(() => {
@@ -95,6 +95,39 @@ const Notifications = () => {
           </div>
         </div>
 
+        {/* 操作栏 */}
+        <div className="flex justify-between items-center mb-4 p-4 bg-white rounded-xl shadow-md">
+          <h2 className="text-xl font-semibold text-gray-800">
+            通知列表
+          </h2>
+          <button 
+            onClick={async () => {
+              try {
+                // 获取所有未读通知
+                const unreadNotifications = notifications.filter(n => !n.read);
+                if (unreadNotifications.length === 0) {
+                  return;
+                }
+                
+                // 批量更新未读通知为已读状态
+                for (const notification of unreadNotifications) {
+                  await updateNotification(notification.id, { read: true });
+                }
+                
+                // 更新本地状态和缓存
+                const list = notifications.map(n => ({ ...n, read: true }));
+                saveAndNotify(list);
+              } catch (error) {
+                console.error('一键已读失败:', error);
+              }
+            }}
+            disabled={notifications.filter(n => !n.read).length === 0}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${notifications.filter(n => !n.read).length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
+          >
+            一键已读
+          </button>
+        </div>
+
         {/* 通知列表 */}
         <div className="space-y-4">
           {notifications.map((notification) => (
@@ -128,9 +161,14 @@ const Notifications = () => {
                       {!notification.read && (
                         <button 
                           className="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-                          onClick={() => {
-                            const list = notifications.map(n => n.id === notification.id ? { ...n, read: true } : n)
-                            saveAndNotify(list)
+                          onClick={async () => {
+                            try {
+                              await updateNotification(notification.id, { read: true })
+                              const list = notifications.map(n => n.id === notification.id ? { ...n, read: true } : n)
+                              saveAndNotify(list)
+                            } catch (error) {
+                              console.error('标记已读失败:', error)
+                            }
                           }}
                         >
                           标记已读
@@ -138,9 +176,14 @@ const Notifications = () => {
                       )}
                       <button 
                         className="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors"
-                        onClick={() => {
-                          const list = notifications.filter(n => n.id !== notification.id)
-                          saveAndNotify(list)
+                        onClick={async () => {
+                          try {
+                            await deleteNotification(notification.id)
+                            const list = notifications.filter(n => n.id !== notification.id)
+                            saveAndNotify(list)
+                          } catch (error) {
+                            console.error('删除通知失败:', error)
+                          }
                         }}
                       >
                         删除

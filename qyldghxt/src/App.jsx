@@ -22,6 +22,8 @@ const AnnualWorkPlan = React.lazy(() => import('./pages/AnnualWorkPlan'))
 const MajorEvents = React.lazy(() => import('./pages/MajorEvents'))
 const MonthlyProgress = React.lazy(() => import('./pages/MonthlyProgress'))
 import ActionPlans from './pages/ActionPlans'
+import ActionPlanDetail from './pages/ActionPlanDetail'
+const ScoreAndOutput = React.lazy(() => import('./pages/ScoreAndOutput'))
 const DataAnalysis = React.lazy(() => import('./pages/DataAnalysis'))
 const CompanyInfo = React.lazy(() => import('./pages/system/CompanyInfo'))
 const DepartmentManagement = React.lazy(() => import('./pages/system/DepartmentManagement'))
@@ -29,10 +31,14 @@ const EmployeeManagement = React.lazy(() => import('./pages/system/EmployeeManag
 const UserManagement = React.lazy(() => import('./pages/system/UserManagement'))
 import SystemSettings from './pages/system/SystemSettings'
 const TemplateSettings = React.lazy(() => import('./pages/system/TemplateSettings'))
+const DingtalkConfig = React.lazy(() => import('./pages/system/DingtalkConfig'))
 const Notifications = React.lazy(() => import('./pages/system/Notifications'))
 const Profile = React.lazy(() => import('./pages/system/Profile'))
 const OrgStructure = React.lazy(() => import('./pages/system/OrgStructure'))
 const ServerConfig = React.lazy(() => import('./pages/ServerConfig'))
+const NotificationPreferences = React.lazy(() => import('./pages/system/NotificationPreferences'))
+const RoleManagement = React.lazy(() => import('./pages/system/RoleManagement'))
+const SystemLogs = React.lazy(() => import('./pages/system/SystemLogs'))
 
 // 加载组件
 const LoadingSpinner = () => (
@@ -144,6 +150,16 @@ function App() {
                   <PermissionRoute permission="数据查看"><ActionPlans /></PermissionRoute>
                 </Suspense>
               } />
+              <Route path="action-plans/:id" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <PermissionRoute permission="数据查看"><ActionPlanDetail /></PermissionRoute>
+                </Suspense>
+              } />
+              <Route path="score-and-output" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <PermissionRoute permission="admin"><ScoreAndOutput /></PermissionRoute>
+                </Suspense>
+              } />
               <Route path="data-analysis" element={
                 <Suspense fallback={<LoadingSpinner />}>
                   <PermissionRoute permission="数据查看"><DataAnalysis /></PermissionRoute>
@@ -169,10 +185,30 @@ function App() {
                   <PermissionRoute permission="用户管理"><UserManagement /></PermissionRoute>
                 </Suspense>
               } />
+              <Route path="system/roles" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <PermissionRoute permission="系统管理"><RoleManagement /></PermissionRoute>
+                </Suspense>
+              } />
+              <Route path="system/logs" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <PermissionRoute permission="系统管理"><SystemLogs /></PermissionRoute>
+                </Suspense>
+              } />
               <Route path="system/settings" element={<PermissionRoute permission="系统管理"><SystemSettings /></PermissionRoute>} />
+              <Route path="system/notification-preferences" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <PermissionRoute permission="系统管理"><NotificationPreferences /></PermissionRoute>
+                </Suspense>
+              } />
               <Route path="system/templates" element={
                 <Suspense fallback={<LoadingSpinner />}>
                   <PermissionRoute permission="系统管理"><TemplateSettings /></PermissionRoute>
+                </Suspense>
+              } />
+              <Route path="system/dingtalk" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <PermissionRoute permission="系统管理"><DingtalkConfig /></PermissionRoute>
                 </Suspense>
               } />
               <Route path="system/org-structure" element={

@@ -26,7 +26,7 @@ const PageHeaderBanner = ({ title, subTitle, right, left, year, onYearChange, ye
               <div className="relative z-20 flex items-center">
                 <Calendar size={18} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <select
-                  value={year}
+                  value={year || ''}
                   onChange={e => onYearChange && onYearChange(parseInt(e.target.value))}
                   className={`${yearSelectClass || 'year-select'} select-center`}
                   title="选择年度"

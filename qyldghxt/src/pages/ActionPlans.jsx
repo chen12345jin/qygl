@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import TableManager from '../components/TableManager'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog'
 import { useData } from '../contexts/DataContext'
@@ -21,29 +22,44 @@ import {
   Download,
   Upload,
   X,
-  Trash2
+  Trash2,
+  Info,
+  HelpCircle
 } from 'lucide-react'
 import PageHeaderBanner from '../components/PageHeaderBanner'
 import { exportToExcel } from '../utils/export'
 import { api } from '../utils/api'
 import * as XLSX from 'xlsx'
 import { computeActionPlanStatus, normalizeProgress } from '../utils/status'
+import toast from 'react-hot-toast'
+import PrintPreview from '../components/PrintPreview'
+import CustomSelect from '../components/CustomSelect'
+
+const validActionPlanStatuses = ['not_started', 'in_progress', 'completed', 'delayed']
 
 const ActionPlans = () => {
-  const { getActionPlans, addActionPlan, updateActionPlan, deleteActionPlan, getDepartments, getSystemSettings, addSystemSetting, updateSystemSetting } = useData()
+  const navigate = useNavigate()
+  const { globalYear, setGlobalYear, getActionPlans, addActionPlan, updateActionPlan, deleteActionPlan, getDepartments, getSystemSettings, addSystemSetting, updateSystemSetting } = useData()
   const [plans, setPlans] = useState([])
   const [departments, setDepartments] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [viewItem, setViewItem] = useState(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [filters, setFilters] = useState({
-    year: new Date().getFullYear(),
+    year: globalYear,
     department: '',
+    priority: '',
     status: '',
     month: ''
   })
+
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, year: globalYear }))
+  }, [globalYear])
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const filterRef = useRef(null)
   const [years, setYears] = useState([2024, 2025, 2026])
   const [yearsSettingId, setYearsSettingId] = useState(null)
   const [currentYearSettingId, setCurrentYearSettingId] = useState(null)
@@ -52,6 +68,20 @@ const ActionPlans = () => {
   const [newYear, setNewYear] = useState('')
   const [yearError, setYearError] = useState('')
   
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setIsFilterOpen(false)
+      }
+    }
+    if (isFilterOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isFilterOpen])
 
   useEffect(() => {
     loadPlans()
@@ -87,7 +117,7 @@ const ActionPlans = () => {
         if (currentFound && (typeof currentFound.value === 'number' || typeof currentFound.value === 'string')) {
           const y = parseInt(currentFound.value)
           if (!isNaN(y)) {
-            setFilters(prev => ({ ...prev, year: y }))
+            setGlobalYear(y)
             setCurrentYearSettingId(currentFound.id)
           }
         }
@@ -118,7 +148,12 @@ const ActionPlans = () => {
     } catch (e) {}
   }
 
-  useEffect(() => { if (filters?.year) { persistSelectedYear(filters.year, yearChangeByUser); if (yearChangeByUser) setYearChangeByUser(false) } }, [filters.year, yearChangeByUser])
+  useEffect(() => {
+    if (filters?.year && yearChangeByUser) {
+      persistSelectedYear(filters.year, true)
+      setYearChangeByUser(false)
+    }
+  }, [filters.year, yearChangeByUser])
 
   const persistAPFilters = async (f) => {
     try {
@@ -138,6 +173,20 @@ const ActionPlans = () => {
       if (filters.month) {
         const m = parseInt(filters.month)
         data = data.filter(p => {
+          // 检查开始日期或结束日期是否在指定月份
+          const startDate = p.start_date ? new Date(p.start_date) : null
+          const endDate = p.end_date ? new Date(p.end_date) : null
+          
+          // 如果有开始日期，检查是否在指定月份
+          if (startDate && !isNaN(startDate)) {
+            if ((startDate.getMonth() + 1) === m) return true
+          }
+          // 如果有结束日期，检查是否在指定月份
+          if (endDate && !isNaN(endDate)) {
+            if ((endDate.getMonth() + 1) === m) return true
+          }
+          
+          // 兼容旧数据格式
           const w = p.when
           if (!w) return false
           const d = new Date(w)
@@ -152,20 +201,78 @@ const ActionPlans = () => {
           return false
         })
       }
+      
+      // 优先级筛选
+      if (filters.priority) {
+        data = data.filter(p => p.priority === filters.priority)
+      }
       const corrected = (data || []).map(p => {
-        const s = computeStatus(p.progress, p.when)
-        return s === p.status ? p : { ...p, status: s }
+        const processedP = {
+          ...p,
+          start_date: p.start_date || p.when,
+          end_date: p.end_date || p.when
+        }
+        const actual = parseFloat(processedP.actual_result) || 0
+        const budget = parseFloat(processedP.how_much) || 0
+        const originalProgressNumber = Number(p.progress)
+        const hasValidOriginalProgress = !isNaN(originalProgressNumber) && originalProgressNumber >= 0 && originalProgressNumber <= 100
+        let progress = hasValidOriginalProgress ? originalProgressNumber : 0
+        if (!hasValidOriginalProgress && budget > 0 && !isNaN(actual)) {
+          progress = (actual / budget) * 100
+        }
+        progress = parseFloat(progress.toFixed(2))
+        const normalizedProgress = normalizeProgress(progress)
+        const dateToUse = processedP.end_date || processedP.start_date || processedP.when
+        const hasValidOriginalStatus = validActionPlanStatuses.includes(p.status)
+        const status = hasValidOriginalStatus ? p.status : computeStatus(normalizedProgress, dateToUse)
+        
+        return { ...processedP, progress: normalizedProgress, status }
       })
-      const paletteKeys = ['c_sky','c_indigo','c_rose','c_amber','c_emerald','c_purple','c_cyan','c_fuchsia','c_lime','c_orange','c_teal']
-      const colored = filters.year === 2025 
-        ? corrected.map((p, i) => ({ ...p, row_color: paletteKeys[i % paletteKeys.length] }))
-        : corrected
-      setPlans(colored)
-      const mismatches = (data || []).filter(p => computeStatus(p.progress, p.when) !== p.status)
-      if (mismatches.length) {
+      setPlans(corrected)
+      const toUpdate = []
+      if (Array.isArray(data)) {
+        for (let i = 0; i < data.length; i++) {
+          const original = data[i]
+          const next = corrected[i]
+          if (!original || !next || !next.id) continue
+          const originalProgressNumber = Number(original.progress)
+          const hasValidOriginalProgress = !isNaN(originalProgressNumber) && originalProgressNumber >= 0 && originalProgressNumber <= 100
+          const originalProgress = hasValidOriginalProgress ? normalizeProgress(originalProgressNumber) : 0
+          const nextProgress = parseFloat(next.progress) || 0
+          const hasValidOriginalStatus = validActionPlanStatuses.includes(original.status)
+          const originalStatus = hasValidOriginalStatus ? original.status : ''
+          const nextStatus = next.status || ''
+          const originalYear = original.year
+          const isLegacy = !hasValidOriginalProgress || !hasValidOriginalStatus
+          if (!isLegacy) continue
+          if (nextProgress !== originalProgress || nextStatus !== originalStatus || next.year !== originalYear) {
+            toUpdate.push({
+              id: next.id,
+              progress: next.progress,
+              status: next.status,
+              year: next.year
+            })
+          }
+        }
+      }
+      if (toUpdate.length > 0) {
         try {
-          await Promise.all(mismatches.map(p => updateActionPlan(p.id, { status: computeStatus(p.progress, p.when), year: p.year })))
-        } catch (e) {}
+          await Promise.all(
+            toUpdate.map(p =>
+              updateActionPlan(
+                p.id,
+                {
+                  progress: p.progress,
+                  status: p.status,
+                  year: p.year
+                },
+                false
+              )
+            )
+          )
+        } catch (e) {
+          console.error('更新进度和状态失败:', e)
+        }
       }
     }
   }
@@ -184,8 +291,21 @@ const ActionPlans = () => {
       ...data,
       year: filters.year
     }
-    planData.progress = normalizeProgress(planData.progress)
-    planData.status = computeStatus(planData.progress, planData.when)
+    
+    // 自动计算进度：实际结果 / 投入预算 * 100%
+    const actual = parseFloat(planData.actual_result) || 0
+    const budget = parseFloat(planData.how_much) || 0
+    let progress = 0
+    if (budget > 0 && !isNaN(actual)) {
+      progress = (actual / budget) * 100
+    }
+    progress = parseFloat(progress.toFixed(2))
+    planData.progress = normalizeProgress(progress)
+    
+    // 使用结束日期作为状态计算的依据，否则使用开始日期
+    const dateToUse = planData.end_date || planData.start_date
+    planData.status = computeStatus(planData.progress, dateToUse)
+    
     const result = await addActionPlan(planData)
     if (result.success) {
       loadPlans()
@@ -198,11 +318,33 @@ const ActionPlans = () => {
 
   const handleEdit = async (id, data) => {
     const current = plans.find(p => p.id === id)
-    const progress = data.progress !== undefined ? data.progress : current?.progress
-    const when = data.when !== undefined ? data.when : current?.when
+    
+    // 获取当前的开始日期和结束日期
+    const start_date = data.start_date !== undefined ? data.start_date : current?.start_date
+    const end_date = data.end_date !== undefined ? data.end_date : current?.end_date
+    
+    // 获取当前的投入预算和实际结果
+    const how_much = data.how_much !== undefined ? data.how_much : current?.how_much
+    const actual_result = data.actual_result !== undefined ? data.actual_result : current?.actual_result
+    
+    // 自动计算进度：实际结果 / 投入预算 * 100%
+    const actual = parseFloat(actual_result) || 0
+    const budget = parseFloat(how_much) || 0
+    let progress = 0
+    if (budget > 0 && !isNaN(actual)) {
+      progress = (actual / budget) * 100
+    }
+    progress = parseFloat(progress.toFixed(2))
     const nextProgress = normalizeProgress(progress)
-    const next = { ...data, progress: nextProgress, status: computeStatus(nextProgress, when) }
-    const keys = ['year','goal','when','what','who','how','why','how_much','department','priority','status','progress','expected_result','actual_result','remarks']
+    
+    // 使用结束日期作为状态计算的依据，否则使用开始日期
+    const dateToUse = end_date || start_date
+    const status = computeStatus(nextProgress, dateToUse)
+    
+    const next = { ...data, progress: nextProgress, status, start_date, end_date, how_much, actual_result }
+    
+    // 更新keys数组，添加start_date和end_date，移除when
+    const keys = ['year','goal','start_date','end_date','what','who','how','why','how_much','department','priority','status','progress','actual_result','remarks']
     const changed = keys.some(k => String(current?.[k] ?? '') !== String(next?.[k] ?? ''))
     if (!changed) {
       return false
@@ -233,41 +375,67 @@ const ActionPlans = () => {
     delete newData.id
     newData.what = `${newData.what}_副本`
     newData.year = filters.year
+    // 确保复制时使用正确的日期字段
+    if (newData.when && !newData.start_date) {
+      newData.start_date = newData.when
+      newData.end_date = newData.when
+      delete newData.when
+    }
     handleAdd(newData)
   }
 
   const handleExportToExcel = () => {
-    try {
-      const exportData = plans.map(p => ({
-        year: p.year,
-        goal: p.goal,
-        when: p.when,
-        what: p.what,
-        who: p.who,
-        how: p.how,
-        why: p.why,
-        how_much: p.how_much,
-        department: p.department,
-        priority: p.priority,
-        status: p.status,
-        progress: p.progress,
-        expected_result: p.expected_result,
-        actual_result: p.actual_result,
-        remarks: p.remarks
-      }))
-      exportToExcel(exportData, `5W2H行动计划_${filters.year}年`, '行动计划', 'actionPlans')
-    } catch (error) {
-      console.error('导出Excel失败:', error)
-      alert('导出失败，请稍后重试')
+    if (!plans || plans.length === 0) {
+      toast('当前没有可导出的数据', { icon: 'ℹ️' })
+      return
     }
+
+    const toastId = toast.loading('正在导出数据...', { duration: 0 })
+
+    setTimeout(() => {
+      try {
+        const exportData = plans.map(p => ({
+          year: p.year,
+          goal: p.goal,
+          '开始日期': p.start_date || p.when,
+          '结束日期': p.end_date || p.when,
+          what: p.what,
+          who: p.who,
+          how: p.how,
+          why: p.why,
+          how_much: p.how_much,
+          department: p.department,
+          priority: p.priority,
+          actual_result: p.actual_result,
+          progress: p.progress,
+          status: p.status,
+          remarks: p.remarks
+        }))
+        exportToExcel(exportData, `5W2H行动计划_${filters.year}年`, '行动计划', 'actionPlans')
+        toast.success(`已导出 ${exportData.length} 条到 Excel`, { id: toastId })
+      } catch (error) {
+        console.error('导出Excel失败:', error)
+        toast.error('导出失败，请稍后重试', { id: toastId })
+      }
+    }, 100)
   }
+
+  const getFilterCount = () => {
+    let count = 0
+    if (filters.department) count++
+    if (filters.priority) count++
+    if (filters.status) count++
+    if (filters.month) count++
+    return count
+  }
+  const filterCount = getFilterCount()
 
   const handleAddYear = async () => {
     const next = (years && years.length ? Math.max(...years) + 1 : new Date().getFullYear())
     const updated = Array.from(new Set([...(years || []), next])).sort((a,b)=>a-b)
     setYears(updated)
     setYearChangeByUser(true)
-    setFilters(prev => ({ ...prev, year: next }))
+    setGlobalYear(next)
     await persistYears(updated)
   }
 
@@ -279,20 +447,42 @@ const ActionPlans = () => {
       const sheet = workbook.Sheets[sheetName]
       const rows = XLSX.utils.sheet_to_json(sheet)
       for (const row of rows) {
+        // 尝试获取开始日期和结束日期，如果没有则使用旧的日期字段
+        const when = row['日期'] || row['日期（何时做When）'] || row['When（什么时候做）'] || ''
+        const start_date = row['开始日期'] || row['开始时间'] || when
+        const end_date = row['结束日期'] || row['结束时间'] || when
+        
+        // 获取投入预算和实际结果
+        const how_much = row['投入预算/程度/数量'] || row['投入预算/程度/数量（做多少How much）'] || row['How Much（多少成本）'] || null
+        const actual_result = row['实际结果'] || row['实际达成'] || ''
+        
+        // 自动计算进度：实际结果 / 投入预算 * 100%
+        const actual = parseFloat(actual_result) || 0
+        const budget = parseFloat(how_much) || 0
+        let progress = 0
+        if (budget > 0 && !isNaN(actual)) {
+          progress = (actual / budget) * 100
+        }
+        progress = parseFloat(progress.toFixed(2))
+        const normalizedProgress = normalizeProgress(progress)
+        
         const payload = {
           year: Number(row['年度'] || filters.year),
           goal: row['目标'] || row['目标（Smart）'] || row['目标（SMART）'] || '',
-          when: row['日期'] || row['日期（何时做When）'] || row['When（什么时候做）'] || '',
+          start_date: start_date,
+          end_date: end_date,
           what: row['事项'] || row['事项（做什么What）'] || row['What（做什么）'] || '',
           who: row['执行人/协同人'] || row['执行人/协同人（谁来做Who）'] || row['Who（谁来做）'] || '',
           how: row['策略方法/执行步骤/行动方案'] || row['策略方法/执行步骤/行动方案（如何做How）'] || row['How（如何做）'] || '',
           why: row['价值'] || row['价值（为什么Why）'] || row['Why（为什么做）'] || '',
-          how_much: row['投入预算/程度/数量'] || row['投入预算/程度/数量（做多少How much）'] || row['How Much（多少成本）'] || null,
+          how_much: how_much,
           department: row['部门'] || '',
           priority: row['优先级'] || '',
-          progress: row['进度（%）'] ? Number(row['进度（%）']) : 0
+          actual_result: actual_result,
+          progress: normalizedProgress
         }
-        payload.status = computeStatus(payload.progress, payload.when)
+        // 使用结束日期作为状态计算的依据
+        payload.status = computeStatus(normalizedProgress, end_date)
         await addActionPlan(payload)
       }
       await loadPlans()
@@ -303,6 +493,45 @@ const ActionPlans = () => {
     }
   }
 
+  const renderStatusBadge = (progress, when) => {
+    const v = computeStatus(progress, when)
+    const p = normalizeProgress(progress)
+    
+    let statusText = '未开始'
+    let colorClass = ''
+    
+    if (p === 100) {
+      colorClass = 'bg-blue-100 text-blue-800'
+      statusText = '已完成'
+    } else if (p > 75) {
+      colorClass = 'bg-emerald-100 text-emerald-800'
+      statusText = '即将完成'
+    } else if (p > 50) {
+      colorClass = 'bg-orange-100 text-orange-800'
+      statusText = '接近完成'
+    } else if (p > 25) {
+      colorClass = 'bg-lime-100 text-lime-800'
+      statusText = '进行中'
+    } else if (p > 0) {
+      colorClass = 'bg-green-50 text-green-700'
+      statusText = '初始'
+    } else {
+      colorClass = 'bg-white border border-gray-200 text-gray-500'
+      statusText = '未开始'
+    }
+    
+    // 如果延期且未完成，在文本后添加提示，但保持进度颜色
+    if (v === 'delayed') {
+       statusText += ' (延期)'
+    }
+
+    return (
+      <span className={`px-2 py-0.5 rounded-full text-xs ${colorClass}`}>
+        {statusText}
+      </span>
+    )
+  }
+
   const columns = [
     { 
       key: 'year', 
@@ -310,22 +539,23 @@ const ActionPlans = () => {
       type: 'select',
       options: years.map(y => ({ value: y, label: `${y}年` })),
       required: true,
-      headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200'
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200 sticky top-0 z-10'
     },
-    { key: 'goal', label: '目标', required: true, type: 'textarea', hint: '明确目标，符合可衡量、可达成、相关、时限', headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200' },
-    { key: 'when', label: '日期', type: 'date', required: true, hint: '选择时间节点或截止日期', headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200', onChange: (value, setFormData, prev) => { const next = { ...prev, when: value }; const p = normalizeProgress(next.progress); const s = computeStatus(p, value); setFormData({ ...next, progress: p, status: s }); } },
-    { key: 'what', label: '事项', required: true, type: 'textarea', hint: '明确要做的具体事项', headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200' },
-    { key: 'who', label: '执行人/协同人', required: true, hint: '填写负责人或团队', headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200' },
-    { key: 'how', label: '策略方法/执行步骤/行动方案', type: 'textarea', hint: '关键步骤与方法', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' },
-    { key: 'why', label: '价值', required: true, type: 'textarea', hint: '说明目的与预期价值', headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200' },
-    { key: 'how_much', label: '投入预算/程度/数量', type: 'number', hint: '预算或资源投入', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' },
+    { key: 'goal', label: '目标', required: true, type: 'textarea', hint: '明确目标，符合可衡量、可达成、相关、时限', headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200 sticky top-0 z-10' },
+    { key: 'start_date', label: '开始日期', type: 'date', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200 sticky top-0 z-10', onChange: (value, setFormData, prev) => { const next = { ...prev, start_date: value }; const p = normalizeProgress(next.progress); const s = computeStatus(p, value); setFormData({ ...next, progress: p, status: s }); } },
+    { key: 'end_date', label: '结束日期', type: 'date', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200 sticky top-0 z-10', onChange: (value, setFormData, prev) => { const next = { ...prev, end_date: value }; const p = normalizeProgress(next.progress); const s = computeStatus(p, value); setFormData({ ...next, progress: p, status: s }); } },
+    { key: 'what', label: '事项', required: true, type: 'textarea', hint: '明确要做的具体事项', headerClassName: 'text-gray-800 bg-gradient-to-r from-blue-100 to-blue-200 border-b border-gray-200 sticky top-0 z-10' },
+    { key: 'who', label: '执行人/协同人', required: true, hint: '填写负责人或团队', headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200 sticky top-0 z-10' },
+    { key: 'how', label: '策略方法/执行步骤/行动方案', type: 'textarea', hint: '关键步骤与方法', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200 sticky top-0 z-10' },
+    { key: 'why', label: '价值', required: true, type: 'textarea', hint: '说明目的与预期价值', headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200 sticky top-0 z-10' },
+    { key: 'how_much', label: '投入预算/程度/数量', type: 'number', hint: '预算或资源投入', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200 sticky top-0 z-10', onChange: (value, setFormData, formData) => { const budget = parseFloat(value) || 0; const actual = parseFloat(formData.actual_result) || 0; let p = 0; if (!isNaN(actual) && budget > 0) { p = (actual / budget) * 100; } p = parseFloat(p.toFixed(2)); const normalizedP = normalizeProgress(p); const next = { ...formData, how_much: value, progress: normalizedP }; const dateToUse = next.end_date || next.start_date; const s = computeStatus(normalizedP, dateToUse); setFormData({ ...next, status: s }); } },
     { 
       key: 'department', 
       label: '负责部门', 
       type: 'select',
-      options: departments.map(dept => ({ value: dept.name, label: dept.name })),
+      options: departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name })),
       required: true,
-      headerClassName: 'text-gray-800 bg-gradient-to-r from-indigo-100 to-indigo-200 border-b border-gray-200'
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-indigo-100 to-indigo-200 border-b border-gray-200 sticky top-0 z-10'
     },
     { 
       key: 'priority', 
@@ -337,7 +567,7 @@ const ActionPlans = () => {
         { value: 'low', label: '低' }
       ],
       required: true,
-      headerClassName: 'text-gray-800 bg-gradient-to-r from-orange-100 to-orange-200 border-b border-gray-200',
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-orange-100 to-orange-200 border-b border-gray-200 sticky top-0 z-10',
       render: (value) => (
         <span className={`px-2 py-0.5 rounded-full text-xs ${
           value === 'high' ? 'bg-red-100 text-red-800' :
@@ -348,41 +578,69 @@ const ActionPlans = () => {
         </span>
       )
     },
+
+    { 
+      key: 'actual_result', 
+      label: '实际结果', 
+      type: 'number', 
+      required: false, 
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200 sticky top-0 z-10',
+      onChange: (value, setFormData, formData) => {
+        const actual = parseFloat(value)
+        const budget = parseFloat(formData.how_much) || 0
+        let p = 0
+        if (!isNaN(actual) && budget > 0) {
+          // 进度 = 实际结果 / 投入预算 * 100%
+          p = (actual / budget) * 100
+        }
+        p = parseFloat(p.toFixed(2))
+        const normalizedP = normalizeProgress(p)
+        const next = { ...formData, actual_result: value, progress: normalizedP }
+        // 使用结束日期作为状态计算的依据
+        const dateToUse = next.end_date || next.start_date
+        const s = computeStatus(normalizedP, dateToUse)
+        setFormData({ ...next, status: s })
+      }
+    },
+    { 
+      key: 'progress', 
+      label: '进度（%）', 
+      type: 'number', 
+      required: filters.year !== 2025, 
+      disabled: true,
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-teal-100 to-teal-200 border-b border-gray-200 sticky top-0 z-10'
+    },
     { 
       key: 'status', 
       label: '状态', 
-      type: 'select',
-      required: true,
+      type: 'custom',
+      required: false,
       options: [
         { value: 'not_started', label: '未开始' },
         { value: 'in_progress', label: '进行中' },
         { value: 'completed', label: '已完成' },
         { value: 'delayed', label: '延期' }
       ],
-      headerClassName: 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200',
-      render: (value, item) => (
-        (() => {
-          const v = computeStatus(item?.progress, item?.when)
-          return (
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              v === 'completed' ? 'bg-green-100 text-green-800' :
-              v === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-              v === 'delayed' ? 'bg-red-100 text-red-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {v === 'completed' ? '已完成' :
-               v === 'in_progress' ? '进行中' :
-               v === 'delayed' ? '延期' : '未开始'}
-            </span>
-          )
-        })()
-      ),
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200 sticky top-0 z-10',
+      render: (value, item) => {
+        // 使用结束日期作为状态计算的依据，否则使用开始日期
+        const dateToUse = item?.end_date || item?.start_date || item?.when;
+        return renderStatusBadge(item?.progress, dateToUse);
+      },
+      customField: ({ formData }) => {
+        // 使用结束日期作为状态计算的依据，否则使用开始日期
+        const dateToUse = formData?.end_date || formData?.start_date;
+        return (
+          <div className="flex flex-col space-y-1">
+            <div className="h-10 flex items-center">
+              {renderStatusBadge(formData?.progress, dateToUse)}
+            </div>
+          </div>
+        );
+      },
       disabled: true
     },
-    { key: 'progress', label: '进度（%）', type: 'number', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-teal-100 to-teal-200 border-b border-gray-200', onChange: (value, setFormData, prev) => { const p = normalizeProgress(value); const next = { ...prev, progress: p }; const s = computeStatus(p, next.when); setFormData({ ...next, status: s }); } },
-    { key: 'expected_result', label: '预期结果', type: 'textarea', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200' },
-    { key: 'actual_result', label: '实际结果', type: 'textarea', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200' },
-    { key: 'remarks', label: '备注', type: 'textarea', headerClassName: 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200' }
+    { key: 'remarks', label: '备注', type: 'textarea', required: false, headerClassName: 'text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200 sticky top-0 z-10' }
   ]
 
   return (
@@ -391,89 +649,133 @@ const ActionPlans = () => {
         title="5W2H行动计划"
         subTitle="年度行动方案制定与落地"
         year={filters.year}
-        onYearChange={(y)=>{ setYearChangeByUser(true); setFilters({ ...filters, year: y }) }}
+        onYearChange={(y)=>{ setYearChangeByUser(true); setGlobalYear(y) }}
         years={years}
         onAddYear={() => setShowYearModal(true)}
         
       />
 
-      
-
-      {/* 5W2H方法说明 - 现代化设计 */}
-      <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-indigo-50 rounded-3xl shadow-2xl p-8 border border-white/50">
-        <div className="flex items-center space-x-4 mb-6">
-          <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-xl shadow-lg">
-            <Target size={24} className="text-white" />
+      {/* 5W2H分析法说明 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mx-1">
+        <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-200">
+            <Info size={20} className="text-white" />
           </div>
-          <h3 className="text-xl font-bold text-gray-800">5W2H分析法说明</h3>
+          <div>
+            <h3 className="text-lg font-bold text-gray-800">5W2H 分析法指南</h3>
+            <p className="text-xs text-gray-500 mt-0.5">七何分析法 · 结构化思考模型</p>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-orange-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-orange-100 p-2 rounded-lg">
-                <Target size={16} className="text-orange-600" />
-              </div>
-              <strong className="text-orange-700">目标（Smart）</strong>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* What */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100 hover:shadow-lg hover:shadow-blue-100/50 hover:-translate-y-1 transition-all duration-300 group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Target size={40} className="text-blue-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确目标，符合可衡量、可达成、相关、时限</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-100 rounded-lg text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <Target size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">What</div>
+            </div>
+            <div className="text-xs font-semibold text-blue-600 mb-1">做什么</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确要做的具体事情</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-red-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-red-100 p-2 rounded-lg">
-                <Calendar size={16} className="text-red-600" />
-              </div>
-              <strong className="text-red-700">日期（何时做When）</strong>
+          
+          {/* Why */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-indigo-50 to-white rounded-xl border border-indigo-100 hover:shadow-lg hover:shadow-indigo-100/50 hover:-translate-y-1 transition-all duration-300 group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <HelpCircle size={40} className="text-indigo-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确时间节点和期限</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <HelpCircle size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">Why</div>
+            </div>
+            <div className="text-xs font-semibold text-indigo-600 mb-1">为什么做</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确做这件事的目的和意义</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-blue-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <FileText size={16} className="text-blue-600" />
-              </div>
-              <strong className="text-blue-700">事项（做什么What）</strong>
+
+          {/* Who */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-100 hover:shadow-lg hover:shadow-purple-100/50 hover:-translate-y-1 transition-all duration-300 group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Users size={40} className="text-purple-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确要做的具体事情</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-purple-100 rounded-lg text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                <Users size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">Who</div>
+            </div>
+            <div className="text-xs font-semibold text-purple-600 mb-1">谁来做</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确负责人和参与者</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-purple-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <Users size={16} className="text-purple-600" />
-              </div>
-              <strong className="text-purple-700">执行人/协同人（谁来做Who）</strong>
+
+          {/* When */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-pink-50 to-white rounded-xl border border-pink-100 hover:shadow-lg hover:shadow-pink-100/50 hover:-translate-y-1 transition-all duration-300 group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Calendar size={40} className="text-pink-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确负责人和参与者</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-pink-100 rounded-lg text-pink-600 group-hover:bg-pink-600 group-hover:text-white transition-colors">
+                <Calendar size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">When</div>
+            </div>
+            <div className="text-xs font-semibold text-pink-600 mb-1">什么时候做</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确时间节点和期限</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-indigo-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-indigo-100 p-2 rounded-lg">
-                <Settings size={16} className="text-indigo-600" />
-              </div>
-              <strong className="text-indigo-700">策略方法/执行步骤/行动方案（如何做How）</strong>
+
+          {/* Where */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-orange-50 to-white rounded-xl border border-orange-100 hover:shadow-lg hover:shadow-orange-100/50 hover:-translate-y-1 transition-all duration-300 group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <MapPin size={40} className="text-orange-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确实施方法和步骤</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-orange-100 rounded-lg text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                <MapPin size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">Where</div>
+            </div>
+            <div className="text-xs font-semibold text-orange-600 mb-1">在哪里做</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确地点和场所</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-green-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-green-100 p-2 rounded-lg">
-                <Target size={16} className="text-green-600" />
-              </div>
-              <strong className="text-green-700">价值（为什么Why）</strong>
+
+          {/* How */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-teal-50 to-white rounded-xl border border-teal-100 hover:shadow-lg hover:shadow-teal-100/50 hover:-translate-y-1 transition-all duration-300 group">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Settings size={40} className="text-teal-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确做这件事的目的和意义</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-teal-100 rounded-lg text-teal-600 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                <Settings size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">How</div>
+            </div>
+            <div className="text-xs font-semibold text-teal-600 mb-1">如何做</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确实施方法和步骤</div>
           </div>
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-teal-100 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center space-x-2 mb-3">
-              <div className="bg-teal-100 p-2 rounded-lg">
-                <DollarSign size={16} className="text-teal-600" />
-              </div>
-              <strong className="text-teal-700">投入预算/程度/数量（做多少How much）</strong>
+
+          {/* How Much */}
+          <div className="relative overflow-hidden p-4 bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100 hover:shadow-lg hover:shadow-emerald-100/50 hover:-translate-y-1 transition-all duration-300 group col-span-1 sm:col-span-2 lg:col-span-2">
+            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+              <DollarSign size={40} className="text-emerald-600" />
             </div>
-            <p className="text-gray-700 text-sm">明确所需资源和成本</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                <DollarSign size={18} />
+              </div>
+              <div className="font-bold text-gray-800 text-base">How Much</div>
+            </div>
+            <div className="text-xs font-semibold text-emerald-600 mb-1">多少成本</div>
+            <div className="text-xs text-gray-500 leading-relaxed">明确所需资源和成本</div>
           </div>
         </div>
       </div>
 
+      <div className="unified-table-wrapper">
       <TableManager
         title={`${filters.year}年度5W2H行动计划表`}
         data={plans}
@@ -482,69 +784,84 @@ const ActionPlans = () => {
         onEdit={handleEdit}
         onDelete={handleDelete}
         onCopy={handleCopy}
-        onView={(item) => setViewItem(item)}
+        onView={(item) => navigate(`/action-plans/${item.id}`)}
         editingId={editingId}
         onEditingChange={setEditingId}
         addHeader={`新增${filters.year}年5W2H行动计划`}
         addSubHeader="完善必填项，支持内联提示与实时进度预览"
         addBadge={String(filters.year)}
-        addTheme="from-teal-600 to-emerald-600"
-        prefill={{ year: filters.year, status: 'not_started', priority: '', progress: 0 }}
-        tableClassName="table-excel ap-5w2h-relaxed"
-        tableContainerClassName="ap-5w2h-scroll"
-        compact={false}
+        addTheme="from-blue-600 to-purple-600"
+        prefill={{ 
+          year: filters.year, 
+          status: 'not_started', 
+          priority: '', 
+          progress: 0,
+          start_date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
+          end_date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`
+        }}
+        tableClassName="unified-data-table"
+        tableContainerClassName="unified-table-scroll"
+        stickyHeader={true}
+        stickyHeaderBgClass="bg-white"
+        compact={filters.year === 2025}
         ultraCompact={false}
-        medium={false}
-        ellipsisAll={false}
-        headerEllipsis={true}
-        ellipsisKeys={[]}
-        singleLineNoEllipsis={true}
-        rowColorBy={filters.year === 2025 ? 'row_color' : undefined}
+        ellipsisAll={filters.year !== 2025}
+        headerEllipsis={filters.year === 2025}
+        singleLineNoEllipsis={filters.year === 2025}
+        rowColorBy="status"
         rowColorMap={{
-          c_sky: 'bg-sky-50',
-          c_indigo: 'bg-indigo-50',
-          c_rose: 'bg-rose-50',
-          c_amber: 'bg-amber-50',
-          c_emerald: 'bg-emerald-50',
-          c_purple: 'bg-purple-50',
-          c_cyan: 'bg-cyan-50',
-          c_fuchsia: 'bg-fuchsia-50',
-          c_lime: 'bg-lime-50',
-          c_orange: 'bg-orange-50',
-          c_teal: 'bg-teal-50'
+          completed: 'bg-green-50',
+          in_progress: 'bg-blue-50',
+          delayed: 'bg-red-50',
+          not_started: 'bg-gray-50'
         }}
         actionsHeaderClassName="text-gray-800 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-200"
         headerActionsLeft={(
-          <div className="relative flex items-center gap-2">
-            <button 
-              className="h-10 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-all duration-200 shadow-lg flex items-center justify-center text-sm gap-2"
+          <div className="flex flex-wrap items-center gap-2 mr-2">
+            <button
+              className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 relative"
               onClick={() => setIsFilterOpen(prev => !prev)}
             >
-              <Filter size={16} />
+              <Filter size={14} />
               <span>筛选</span>
+              {filterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center border border-white">
+                  {filterCount}
+                </span>
+              )}
             </button>
-            <button 
-              className="h-10 px-3 bg-gray-100 text-gray-800 rounded-xl font-medium hover:bg-gray-200 transition-all duration-200 shadow flex items-center justify-center text-sm gap-2"
-              onClick={() => setFilters(prev => ({ ...prev, department: '', status: '', month: '' }))}
+            <button
+              className={`px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200 shadow-sm flex items-center justify-center text-sm gap-2 ${!(filters.month || filters.department || filters.priority || filters.status) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => {
+                setFilters(prev => ({ ...prev, department: '', priority: '', status: '', month: '' }))
+              }}
+              title="重置筛选"
+              disabled={!(filters.month || filters.department || filters.priority || filters.status)}
             >
-              <RefreshCcw size={16} className="text-gray-700" />
+              <RefreshCcw size={14} />
               <span>重置</span>
             </button>
             <button 
-              className="h-10 px-4 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-teal-700 transition-all duration-200 shadow-lg flex items-center justify-center text-sm gap-2"
+              className={`px-3 py-2 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-teal-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 ${plans.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={handleExportToExcel}
+              disabled={plans.length === 0}
             >
-              <Download size={16} />
+              <Download size={14} />
               <span>导出Excel</span>
             </button>
-            <input id="ap-import-input" type="file" accept=".xlsx,.xls" className="hidden" onChange={async (e) => { const f = e.target.files && e.target.files[0]; if (f) { await handleImportFromExcel(f); e.target.value = '' } }} />
             <button 
-              className="h-10 px-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg flex items-center justify-center text-sm gap-2"
-              onClick={() => document.getElementById('ap-import-input')?.click()}
+              className={`px-3 py-2 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-lg font-semibold hover:from-rose-600 hover:to-pink-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 ${plans.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => setShowPrintPreview(true)}
+              disabled={plans.length === 0}
             >
-              <Upload size={16} />
-              <span>导入Excel</span>
+              <FileText size={14} />
+              <span>导出PDF</span>
             </button>
+            <label htmlFor="ap-import-input" className="px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 cursor-pointer">
+              <Upload size={14} />
+              <span>导入Excel</span>
+              <input id="ap-import-input" name="ap-import-input" type="file" accept=".xlsx,.xls" className="hidden" onChange={async (e) => { const f = e.target.files && e.target.files[0]; if (f) { await handleImportFromExcel(f); e.target.value = '' } }} />
+            </label>
           </div>
         )}
         pagination={{
@@ -556,7 +873,7 @@ const ActionPlans = () => {
         }}
       >
         {isFilterOpen && (
-          <div className="card p-6">
+          <div className="card p-6" ref={filterRef}>
             <div className="flex items-center justify-start mb-4">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
@@ -570,63 +887,77 @@ const ActionPlans = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="panel-department" className="block text-sm font-medium text-gray-700 mb-1">部门</label>
-                <select id="panel-department" name="department"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white transition-all duration-200 text-sm"
+                <label htmlFor="panel-month" className="block text-sm font-medium text-gray-700 mb-1">月份</label>
+                <CustomSelect
+                  id="panel-month"
+                  value={filters.month}
+                  onChange={(value) => setFilters({ ...filters, month: value })}
+                  placeholder="全部月份"
+                  options={[
+                    { value: '', label: '全部月份' },
+                    ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}月` }))
+                  ]}
+                  className="focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="panel-department" className="block text-sm font-medium text-gray-700 mb-1">负责部门</label>
+                <CustomSelect
+                  id="panel-department"
                   value={filters.department}
-                  onChange={(e) => setFilters({ ...filters, department: e.target.value })}
-                >
-                  <option value="">全部部门</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.name}>{dept.name}</option>
-                  ))}
-                </select>
+                  onChange={(value) => setFilters({ ...filters, department: value })}
+                  placeholder="全部部门"
+                  options={[
+                    { value: '', label: '全部部门' },
+                    ...departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name }))
+                  ]}
+                  className="focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="panel-priority" className="block text-sm font-medium text-gray-700 mb-1">优先级</label>
+                <CustomSelect
+                  id="panel-priority"
+                  value={filters.priority}
+                  onChange={(value) => setFilters({ ...filters, priority: value })}
+                  placeholder="全部优先级"
+                  options={[
+                    { value: '', label: '全部优先级' },
+                    { value: 'high', label: '高' },
+                    { value: 'medium', label: '中' },
+                    { value: 'low', label: '低' }
+                  ]}
+                  className="focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
               </div>
               <div>
                 <label htmlFor="panel-status" className="block text-sm font-medium text-gray-700 mb-1">状态</label>
-                <select id="panel-status" name="status"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                <CustomSelect
+                  id="panel-status"
                   value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                >
-                  <option value="">全部状态</option>
-                  <option value="not_started">未开始</option>
-                  <option value="in_progress">进行中</option>
-                  <option value="completed">已完成</option>
-                  <option value="delayed">延期</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="panel-month" className="block text-sm font-medium text-gray-700 mb-1">月份</label>
-                <select id="panel-month" name="month"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white transition-all duration-200 text-sm"
-                  value={filters.month}
-                  onChange={(e) => setFilters({ ...filters, month: e.target.value })}
-                >
-                  <option value="">全部月份</option>
-                  <option value="1">1月</option>
-                  <option value="2">2月</option>
-                  <option value="3">3月</option>
-                  <option value="4">4月</option>
-                  <option value="5">5月</option>
-                  <option value="6">6月</option>
-                  <option value="7">7月</option>
-                  <option value="8">8月</option>
-                  <option value="9">9月</option>
-                  <option value="10">10月</option>
-                  <option value="11">11月</option>
-                  <option value="12">12月</option>
-                </select>
+                  onChange={(value) => setFilters({ ...filters, status: value })}
+                  placeholder="全部状态"
+                  options={[
+                    { value: '', label: '全部状态' },
+                    { value: 'not_started', label: '未开始' },
+                    { value: 'in_progress', label: '进行中' },
+                    { value: 'completed', label: '已完成' },
+                    { value: 'delayed', label: '延期' }
+                  ]}
+                  className="focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
             </div>
           </div>
         )}
       </TableManager>
+      </div>
 
+      {/* 年度管理弹窗 */}
       {showYearModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
-            <div className="p-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 text白 flex items-center justify-between">
+            <div className="p-4 border-b bg-gradient-to-r from-blue-500 to-purple-600 text-white flex items-center justify-between">
               <div className="font-semibold">年份管理</div>
               <button onClick={() => setShowYearModal(false)} className="text-white/80 hover:text-white" title="关闭">
                 <X size={18} />
@@ -656,7 +987,7 @@ const ActionPlans = () => {
                       }
                     }}
                     placeholder="输入年份，如 2027"
-                    className="h-10 w-40 px-3 bg白 text-gray-800 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50"
+                    className="h-10 w-40 px-3 bg-white text-gray-800 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-50"
                   />
                   <button
                     onClick={async () => {
@@ -664,17 +995,17 @@ const ActionPlans = () => {
                       if (!v) { setYearError('请输入有效年份（1900-2100）'); return }
                       const n = parseInt(v)
                       if (isNaN(n) || n < 1900 || n > 2100) { setYearError('请输入有效年份（1900-2100）'); return }
-                      if (years.includes(n)) { setYearError('年份已存在'); setFilters(prev => ({ ...prev, year: n })); return }
+                      if (years.includes(n)) { setYearError('年份已存在'); setGlobalYear(n); return }
                       const updated = [...years, n].sort((a,b)=>a-b)
                       setYears(updated)
                       await persistYears(updated)
                       setYearChangeByUser(true)
-                      setFilters(prev => ({ ...prev, year: n }))
+                      setGlobalYear(n)
                       setNewYear('')
                       setYearError('')
                       setShowYearModal(false)
                     }}
-                    className="px-4 h-10 text-sm bg-gradient-to-r from-blue-500 to-purple-600 text白 rounded-xl hover:from-blue-600 hover:to-purple-700"
+                    className="px-4 h-10 text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700"
                   >
                     添加
                   </button>
@@ -692,7 +1023,7 @@ const ActionPlans = () => {
                       ) : (
                         <button
                           className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 whitespace-nowrap"
-                          onClick={() => { setYearChangeByUser(true); setFilters(prev => ({ ...prev, year: y })) }}
+                          onClick={() => { setYearChangeByUser(true); setGlobalYear(y) }}
                         >设为当前</button>
                       )}
                       <button
@@ -708,7 +1039,7 @@ const ActionPlans = () => {
                           }
                           if (filters.year===y) {
                             setYearChangeByUser(true)
-                            setFilters(prev => ({ ...prev, year: fallback }))
+                            setGlobalYear(fallback)
                           }
                         }}
                         className="p-1 rounded-full bg-red-50 text-red-600 hover:bg-red-100"
@@ -728,190 +1059,17 @@ const ActionPlans = () => {
         </div>
       )}
 
-      {viewItem && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-3">
-          <div className="w-[640px] max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[80vh]">
-            <div className="p-5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white rounded-xl">
-                  <Target size={20} className="text-white" />
-                </div>
-                <div>
-                  <div className="text-xl font-bold">查看行动计划</div>
-                  <div className="text-xs opacity-90 mt-1">{filters.year}年度 · {viewItem.department || '未设置部门'}</div>
-                </div>
-              </div>
-              <button onClick={() => setViewItem(null)} className="h-8 px-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800">
-                关闭
-              </button>
-            </div>
-            <div className="p-4 space-y-3 overflow-y-auto max-h-[65vh]">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-3">
-                  <div className="text-xs font-semibold text-sky-700">年度</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.year ?? filters.year}</div>
-                </div>
-                <div className="rounded-2xl border border-teal-100 bg-teal-50 p-3">
-                  <div className="text-xs font-semibold text-teal-700">目标</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.goal || '-'}</div>
-                </div>
-                <div className="rounded-2xl border border-rose-100 bg-rose-50 p-3">
-                  <div className="text-xs font-semibold text-rose-700">日期</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.when || '-'}</div>
-                </div>
-                <div className="md:col-span-2 rounded-2xl border border-blue-100 bg-blue-50 p-3">
-                  <div className="text-xs font-semibold text-blue-700">事项</div>
-                  <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewItem.what || '-'}</div>
-                </div>
-                <div className="rounded-2xl border border-purple-100 bg-purple-50 p-3">
-                  <div className="text-xs font-semibold text-purple-700">执行人/协同人</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.who || '-'}</div>
-                </div>
-                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
-                  <div className="text-xs font-semibold text-indigo-700">负责部门</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.department || '-'}</div>
-                </div>
-                <div className="md:col-span-2 rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
-                  <div className="text-xs font-semibold text-indigo-700">策略方法/执行步骤/行动方案</div>
-                  <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewItem.how || '-'}</div>
-                </div>
-                <div className="md:col-span-2 rounded-2xl border border-green-100 bg-green-50 p-3">
-                  <div className="text-xs font-semibold text-green-700">价值</div>
-                  <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewItem.why || '-'}</div>
-                </div>
-                <div className="rounded-2xl border border-teal-100 bg-teal-50 p-3">
-                  <div className="text-xs font-semibold text-teal-700">投入预算/程度/数量</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.how_much ?? '-'}</div>
-                </div>
-                <div className="rounded-2xl border border-yellow-100 bg-yellow-50 p-3">
-                  <div className="text-xs font-semibold text-yellow-700">优先级</div>
-                  <div className="mt-2 text-xs">
-                    <span className={`${viewItem.priority==='high'?'bg-red-100 text-red-800':viewItem.priority==='medium'?'bg-yellow-100 text-yellow-800':viewItem.priority==='low'?'bg-green-100 text-green-800':'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full`}>
-                      {viewItem.priority==='high'?'高':viewItem.priority==='medium'?'中':viewItem.priority==='low'?'低':(viewItem.priority||'-')}
-                    </span>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
-                  <div className="text-xs font-semibold text-blue-700">状态</div>
-                  <div className="mt-2 text-xs">
-                    <span className={`${viewItem.status==='completed'?'bg-green-100 text-green-800':viewItem.status==='in_progress'?'bg-blue-100 text-blue-800':viewItem.status==='delayed'?'bg-red-100 text-red-800':'bg-gray-100 text-gray-800'} px-2 py-1 rounded-full`}>
-                      {viewItem.status==='completed'?'已完成':viewItem.status==='in_progress'?'进行中':viewItem.status==='delayed'?'延期':viewItem.status==='not_started'?'未开始':(viewItem.status||'-')}
-                    </span>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-3">
-                  <div className="text-xs font-semibold text-cyan-700">进度（%）</div>
-                  <div className="mt-2 text-sm text-gray-800">{viewItem.progress ?? '-'}</div>
-                </div>
-                <div className="md:col-span-2 rounded-2xl border border-violet-100 bg-violet-50 p-3">
-                  <div className="text-xs font-semibold text-violet-700">预期结果</div>
-                  <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewItem.expected_result || '-'}</div>
-                </div>
-                <div className="md:col-span-2 rounded-2xl border border-rose-100 bg-rose-50 p-3">
-                  <div className="text-xs font-semibold text-rose-700">实际结果</div>
-                  <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewItem.actual_result || '-'}</div>
-                </div>
-                <div className="md:col-span-2 rounded-2xl border border-gray-200 bg-gray-50 p-3">
-                  <div className="text-xs font-semibold text-gray-700">备注</div>
-                  <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewItem.remarks || '-'}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {false && (
-      <div className="bg-gradient-to-br from-white/80 to-blue-50/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {plans.map((item) => (
-            <div key={item.id || `${item.what}-${item.when}`} className="bg-white/90 rounded-2xl border border-gray-100 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <div className="text-lg font-bold truncate">{item.goal || '未填写目标'}</div>
-                    <div className="mt-1 text-xs opacity-90 flex items-center gap-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/20">{item.department || '未设置部门'}</span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white/20">{item.when || '未选择日期'}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${
-                      item.priority === 'high' ? 'bg-red-100 text-red-800' :
-                      item.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>{item.priority === 'high' ? '高' : item.priority === 'medium' ? '中' : '低'}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs ${
-                      item.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      item.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      item.status === 'delayed' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>{item.status === 'completed' ? '已完成' : item.status === 'in_progress' ? '进行中' : item.status === 'delayed' ? '延期' : '未开始'}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3">
-                    <div className="text-xs font-semibold text-blue-700 mb-1">事项（What）</div>
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.what || '-'}</div>
-                  </div>
-                  <div className="rounded-xl border border-green-100 bg-green-50/40 p-3">
-                    <div className="text-xs font-semibold text-green-700 mb-1">价值（Why）</div>
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.why || '-'}</div>
-                  </div>
-                  <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3">
-                    <div className="text-xs font-semibold text-purple-700 mb-1">执行人/协同人（Who）</div>
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.who || '-'}</div>
-                  </div>
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
-                    <div className="text-xs font-semibold text-indigo-700 mb-1">策略方法/执行步骤（How）</div>
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{item.how || '-'}</div>
-                  </div>
-                  <div className="rounded-xl border border-teal-100 bg-teal-50/40 p-3 sm:col-span-2">
-                    <div className="text-xs font-semibold text-teal-700 mb-1">投入预算/程度/数量（How Much）</div>
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{(item.how_much ?? '') !== '' ? item.how_much : '-'}</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <div className="text-xs text-gray-500">进度：<span className="font-semibold text-gray-700">{Number(item.progress || 0)}%</span></div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="text-blue-600 hover:text-blue-800 transition-colors p-2 rounded-lg hover:bg-blue-50"
-                      onClick={() => { setTriggerEditPrefill(item); setTriggerEdit(v => !v) }}
-                      title="编辑"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      className="text-green-600 hover:text-green-800 transition-colors p-2 rounded-lg hover:bg-green-50"
-                      onClick={() => handleCopy(item)}
-                      title="复制"
-                    >
-                      <Copy size={18} />
-                    </button>
-                    <button
-                      className="text-red-600 hover:text-red-800 transition-colors p-2 rounded-lg hover:bg-red-50"
-                      onClick={() => handleDelete(item.id)}
-                      title="删除"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        {(!plans || plans.length === 0) && (
-          <div className="empty-state">
-            <div className="text-gray-600">暂无行动计划</div>
-          </div>
-        )}
-      </div>
-      )}
+      {/* PDF打印预览 */}
+      <PrintPreview
+        isOpen={showPrintPreview}
+        onClose={() => setShowPrintPreview(false)}
+        title={`${filters.year}年度5W2H行动计划`}
+        data={plans}
+        columns={columns}
+        filename={`5W2H行动计划_${filters.year}年`}
+        pageType="actionPlans"
+        year={filters.year}
+      />
     </div>
   )
 }

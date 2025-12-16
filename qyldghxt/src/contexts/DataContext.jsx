@@ -15,7 +15,23 @@ export const useData = () => {
 
 export const DataProvider = ({ children }) => {
   const [loading, setLoading] = useState(false)
+  const [globalYear, setGlobalYearState] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('currentPlanningYear')
+      const parsed = parseInt(saved, 10)
+      if (!isNaN(parsed)) return parsed
+    }
+    return new Date().getFullYear()
+  })
+
   const { emitDataUpdate } = useSocket()
+
+  const setGlobalYear = (year) => {
+    setGlobalYearState(year)
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('currentPlanningYear', String(year))
+    }
+  }
 
   // 通用API调用方法
   const handleApiCall = async (operation, showToast = true) => {
@@ -75,9 +91,17 @@ export const DataProvider = ({ children }) => {
   }
 
   // 部门管理
-  const getDepartments = async () => {
+  const getDepartments = async (params = {}) => {
     return handleApiCall(async () => {
-      const response = await api.get('/departments')
+      const response = await api.get('/departments', { params })
+      return response.data
+    }, false)
+  }
+
+  // 获取组织架构树形结构
+  const getOrganizationTree = async () => {
+    return handleApiCall(async () => {
+      const response = await api.get('/organization/tree')
       return response.data
     }, false)
   }
@@ -192,6 +216,44 @@ export const DataProvider = ({ children }) => {
     })
   }
 
+  // 角色管理
+  const getRoles = async (params = {}) => {
+    return handleApiCall(async () => {
+      const response = await api.get('/roles', { params })
+      return response.data
+    }, false)
+  }
+
+  const addRole = async (data) => {
+    return handleApiCall(async () => {
+      const response = await api.post('/roles', data)
+      return response.data
+    })
+  }
+
+  const updateRole = async (id, data) => {
+    return handleApiCall(async () => {
+      await api.put(`/roles/${id}`, data)
+      return data
+    })
+  }
+
+  const deleteRole = async (id) => {
+    return handleApiCall(async () => {
+      const response = await api.delete(`/roles/${id}`)
+      ensureDeleteOk(response)
+      return true
+    })
+  }
+
+  // 系统日志
+  const getSystemLogs = async (params = {}) => {
+    return handleApiCall(async () => {
+      const response = await api.get('/logs', { params })
+      return response.data
+    }, false)
+  }
+
   // 部门目标分解
   const getDepartmentTargets = async (params = {}) => {
     return handleApiCall(async () => {
@@ -203,6 +265,7 @@ export const DataProvider = ({ children }) => {
   const addDepartmentTarget = async (data) => {
     return handleApiCall(async () => {
       const response = await api.post('/department-targets', data)
+      try { emitDataUpdate('departmentTargets', { year: data?.year, action: 'add' }) } catch {}
       return response.data
     })
   }
@@ -210,6 +273,7 @@ export const DataProvider = ({ children }) => {
   const updateDepartmentTarget = async (id, data) => {
     return handleApiCall(async () => {
       await api.put(`/department-targets/${id}`, data)
+      try { emitDataUpdate('departmentTargets', { year: data?.year, action: 'update' }) } catch {}
       return data
     })
   }
@@ -218,6 +282,7 @@ export const DataProvider = ({ children }) => {
     return handleApiCall(async () => {
       const response = await api.delete(`/department-targets/${id}`)
       ensureDeleteOk(response)
+      try { emitDataUpdate('departmentTargets', { action: 'delete' }) } catch {}
       return true
     })
   }
@@ -283,6 +348,7 @@ export const DataProvider = ({ children }) => {
   const addMajorEvent = async (data) => {
     return handleApiCall(async () => {
       const response = await api.post('/major-events', data)
+      try { emitDataUpdate('majorEvents', { year: data?.year, action: 'add' }) } catch {}
       return response.data
     })
   }
@@ -290,6 +356,7 @@ export const DataProvider = ({ children }) => {
   const updateMajorEvent = async (id, data) => {
     return handleApiCall(async () => {
       await api.put(`/major-events/${id}`, data)
+      try { emitDataUpdate('majorEvents', { year: data?.year, action: 'update' }) } catch {}
       return data
     })
   }
@@ -298,6 +365,7 @@ export const DataProvider = ({ children }) => {
     return handleApiCall(async () => {
       const response = await api.delete(`/major-events/${id}`)
       ensureDeleteOk(response)
+      try { emitDataUpdate('majorEvents', { action: 'delete' }) } catch {}
       return true
     })
   }
@@ -313,6 +381,7 @@ export const DataProvider = ({ children }) => {
   const addMonthlyProgress = async (data) => {
     return handleApiCall(async () => {
       const response = await api.post('/monthly-progress', data)
+      try { emitDataUpdate('monthlyProgress', { year: data?.year, action: 'add' }) } catch {}
       return response.data
     })
   }
@@ -320,6 +389,7 @@ export const DataProvider = ({ children }) => {
   const updateMonthlyProgress = async (id, data) => {
     return handleApiCall(async () => {
       await api.put(`/monthly-progress/${id}`, data)
+      try { emitDataUpdate('monthlyProgress', { year: data?.year, action: 'update' }) } catch {}
       return data
     })
   }
@@ -328,6 +398,7 @@ export const DataProvider = ({ children }) => {
     return handleApiCall(async () => {
       const response = await api.delete(`/monthly-progress/${id}`)
       ensureDeleteOk(response)
+      try { emitDataUpdate('monthlyProgress', { action: 'delete' }) } catch {}
       return true
     })
   }
@@ -348,12 +419,12 @@ export const DataProvider = ({ children }) => {
     })
   }
 
-  const updateActionPlan = async (id, data) => {
+  const updateActionPlan = async (id, data, showToast = true) => {
     return handleApiCall(async () => {
       await api.put(`/action-plans/${id}`, data)
       try { emitDataUpdate('actionPlans', { year: data?.year, action: 'update' }) } catch {}
       return data
-    })
+    }, showToast)
   }
 
   const deleteActionPlan = async (id) => {
@@ -485,6 +556,13 @@ export const DataProvider = ({ children }) => {
     })
   }
 
+  const sendNotification = async (data) => {
+    return handleApiCall(async () => {
+      const response = await api.post('/notifications/send', data)
+      return response.data
+    })
+  }
+
   // 文件上传
   const uploadFile = async (file) => {
     return handleApiCall(async () => {
@@ -528,12 +606,15 @@ export const DataProvider = ({ children }) => {
 
   const value = {
     loading,
+    globalYear,
+    setGlobalYear,
     getDepartments,
     addDepartment,
     updateDepartment,
     deleteDepartment,
     getDingTalkDepartments,
     syncDepartmentsFromDingTalk,
+    getOrganizationTree,
     getEmployees,
     addEmployee,
     updateEmployee,
@@ -544,6 +625,11 @@ export const DataProvider = ({ children }) => {
     addUser,
     updateUser,
     deleteUser,
+    getRoles,
+    addRole,
+    updateRole,
+    deleteRole,
+    getSystemLogs,
     getDepartmentTargets,
     addDepartmentTarget,
     updateDepartmentTarget,
@@ -584,10 +670,10 @@ export const DataProvider = ({ children }) => {
     addNotification,
     updateNotification,
     deleteNotification,
+    sendNotification,
     uploadFile,
     getCompanyInfo,
-    updateCompanyInfo
-    ,
+    updateCompanyInfo,
     getIntegrationStatus,
     checkBackendHealth
   }

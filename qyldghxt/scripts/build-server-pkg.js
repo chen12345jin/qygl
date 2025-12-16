@@ -1,25 +1,58 @@
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const JavaScriptObfuscator = require('javascript-obfuscator');
 
 const rootDir = process.cwd();
 const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf-8'));
 const version = pkg.version || '0.0.0';
 const azbDir = path.join(rootDir, 'azb');
 const serverSourceDir = path.join(azbDir, version, 'release', 'server-source');
+const serverEntry = path.join(rootDir, 'server', 'index.js');
+const tempDir = path.join(azbDir, version, 'tmp');
+const obfuscatedEntry = path.join(tempDir, 'server-index-obf.js');
 
-// Clean and create directories
+if (!fs.existsSync(serverEntry)) {
+  console.error('Server entry server/index.js not found.');
+  process.exit(1);
+}
+
 if (fs.existsSync(serverSourceDir)) {
   fs.rmSync(serverSourceDir, { recursive: true, force: true });
 }
 fs.mkdirSync(serverSourceDir, { recursive: true });
+fs.mkdirSync(tempDir, { recursive: true });
 
-console.log('1. Building backend executable with pkg...');
+console.log('1. Obfuscating server/index.js before pkg...');
 try {
-  // Using npx pkg to bundle server/index.js (CommonJS)
-  // Note: Assuming node18-win-x64 target.
+  const sourceCode = fs.readFileSync(serverEntry, 'utf-8');
+  const result = JavaScriptObfuscator.obfuscate(sourceCode, {
+    compact: true,
+    controlFlowFlattening: true,
+    controlFlowFlatteningThreshold: 0.4,
+    deadCodeInjection: true,
+    deadCodeInjectionThreshold: 0.1,
+    stringArray: true,
+    rotateStringArray: true,
+    shuffleStringArray: true,
+    stringArrayThreshold: 0.5,
+    debugProtection: false,
+    disableConsoleOutput: false,
+    target: 'node'
+  });
+  fs.writeFileSync(obfuscatedEntry, result.getObfuscatedCode());
+} catch (e) {
+  console.error('Obfuscation failed:', e.message || e);
+  process.exit(1);
+}
+
+console.log('2. Building backend executable with pkg...');
+try {
   const outputExe = path.join(serverSourceDir, 'backend-service.exe');
-  execSync(`npx pkg server/index.js --targets node18-win-x64 --output "${outputExe.replace(/\\/g, '/')}"`, {
+  execSync(`npx pkg "${obfuscatedEntry.replace(/\\/g, '/')}" --targets node18-win-x64 --output "${outputExe.replace(/\\/g, '/')}"`, {
     stdio: 'inherit',
     cwd: rootDir
   });
@@ -28,7 +61,7 @@ try {
   process.exit(1);
 }
 
-console.log('2. Copying configuration files...');
+console.log('3. Copying configuration files...');
 // Copy .env
 const envPath = path.join(rootDir, '.env');
 if (fs.existsSync(envPath)) {
@@ -38,7 +71,7 @@ if (fs.existsSync(envPath)) {
   fs.writeFileSync(path.join(serverSourceDir, '.env'), 'PORT=5004\nDB_ENABLED=true\nDB_HOST=localhost\nDB_USER=root\nDB_PASSWORD=\nDB_NAME=planning_system\n');
 }
 
-console.log('3. Creating scripts...');
+console.log('4. Creating scripts...');
 // Create start_server.bat
 const batContent = `@echo off
 cd /d "%~dp0"
@@ -202,7 +235,7 @@ CREATE TABLE IF NOT EXISTS employees (
 `;
 fs.writeFileSync(path.join(serverSourceDir, 'db-mysql.sql'), sqlContent);
 
-console.log('4. Preparing MySQL folder...');
+console.log('5. Preparing MySQL folder...');
 const mysqlDir = path.join(serverSourceDir, 'mysql');
 if (!fs.existsSync(mysqlDir)) {
   fs.mkdirSync(mysqlDir);
@@ -212,19 +245,3 @@ if (!fs.existsSync(mysqlDir)) {
 
 console.log('Server Source preparation complete.');
 console.log(`Files are in: ${serverSourceDir}`);
-
-// 5. Copy server/node_modules into server-source for packaging (avoid EBUSY from live node_modules)
-try {
-  const nmSrc = path.join(rootDir, 'server', 'node_modules');
-  const nmDst = path.join(serverSourceDir, 'node_modules');
-  if (fs.existsSync(nmDst)) fs.rmSync(nmDst, { recursive: true, force: true });
-  if (fs.existsSync(nmSrc)) {
-    console.log('Copying server/node_modules → server-source/node_modules ...');
-    fs.cpSync(nmSrc, nmDst, { recursive: true });
-    console.log('node_modules copied.');
-  } else {
-    console.warn('server/node_modules not found, skipping copy.');
-  }
-} catch (e) {
-  console.warn('Copy node_modules failed:', e?.message || e);
-}

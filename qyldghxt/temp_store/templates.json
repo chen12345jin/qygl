@@ -1,0 +1,221 @@
+[
+  {
+    "id": 1,
+    "created_at": "2025-12-16T05:33:06.044Z",
+    "updated_at": "2025-12-16T05:33:06.039Z",
+    "name": "1",
+    "type": "department_target",
+    "description": "",
+    "fields": [
+      {
+        "key": "department",
+        "label": "部门",
+        "type": "select",
+        "required": true,
+        "options": []
+      },
+      {
+        "key": "level",
+        "label": "级别",
+        "type": "select",
+        "required": true,
+        "options": [
+          {
+            "value": "A",
+            "label": "A-保底"
+          },
+          {
+            "value": "B",
+            "label": "B-平衡"
+          },
+          {
+            "value": "C",
+            "label": "C-突破"
+          },
+          {
+            "value": "D",
+            "label": "D-冲刺"
+          }
+        ]
+      },
+      {
+        "key": "target_type",
+        "label": "目标类型",
+        "type": "select",
+        "required": true,
+        "options": [
+          {
+            "value": "sales",
+            "label": "销售"
+          },
+          {
+            "value": "profit",
+            "label": "利润"
+          },
+          {
+            "value": "project",
+            "label": "项目"
+          },
+          {
+            "value": "efficiency",
+            "label": "效率"
+          },
+          {
+            "value": "quality",
+            "label": "质量"
+          },
+          {
+            "value": "cost",
+            "label": "成本"
+          }
+        ]
+      },
+      {
+        "key": "target_name",
+        "label": "目标名称",
+        "type": "text",
+        "required": true
+      },
+      {
+        "key": "target_value",
+        "label": "目标值",
+        "type": "number",
+        "required": true
+      },
+      {
+        "key": "unit",
+        "label": "单位",
+        "type": "text",
+        "required": true
+      },
+      {
+        "key": "quarter",
+        "label": "季度",
+        "type": "select",
+        "required": true,
+        "options": [
+          {
+            "value": "Q1",
+            "label": "Q1"
+          },
+          {
+            "value": "Q2",
+            "label": "Q2"
+          },
+          {
+            "value": "Q3",
+            "label": "Q3"
+          },
+          {
+            "value": "Q4",
+            "label": "Q4"
+          }
+        ]
+      },
+      {
+        "key": "month",
+        "label": "月份",
+        "type": "select",
+        "required": true,
+        "options": [
+          {
+            "value": "1",
+            "label": "1月"
+          },
+          {
+            "value": "2",
+            "label": "2月"
+          },
+          {
+            "value": "3",
+            "label": "3月"
+          },
+          {
+            "value": "4",
+            "label": "4月"
+          },
+          {
+            "value": "5",
+            "label": "5月"
+          },
+          {
+            "value": "6",
+            "label": "6月"
+          },
+          {
+            "value": "7",
+            "label": "7月"
+          },
+          {
+            "value": "8",
+            "label": "8月"
+          },
+          {
+            "value": "9",
+            "label": "9月"
+          },
+          {
+            "value": "10",
+            "label": "10月"
+          },
+          {
+            "value": "11",
+            "label": "11月"
+          },
+          {
+            "value": "12",
+            "label": "12月"
+          }
+        ]
+      },
+      {
+        "key": "current_value",
+        "label": "当前值",
+        "type": "number",
+        "required": false
+      },
+      {
+        "key": "progress",
+        "label": "进度",
+        "type": "number",
+        "required": false
+      },
+      {
+        "key": "status",
+        "label": "状态",
+        "type": "select",
+        "required": false,
+        "options": [
+          {
+            "value": "not_started",
+            "label": "未开始"
+          },
+          {
+            "value": "in_progress",
+            "label": "进行中"
+          },
+          {
+            "value": "completed",
+            "label": "已完成"
+          },
+          {
+            "value": "delayed",
+            "label": "已延迟"
+          }
+        ]
+      },
+      {
+        "key": "responsible_person",
+        "label": "负责人",
+        "type": "text",
+        "required": true
+      },
+      {
+        "key": "description",
+        "label": "描述",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  }
+]

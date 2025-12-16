@@ -83,7 +83,9 @@ th, td {
   overflow-wrap: break-word;
 }
 
-th:last-child, td:last-child {
+/* 排除年度规划图表，不应用最后一列右对齐规则 */
+table:not(.annual-chart-table) th:last-child,
+table:not(.annual-chart-table) td:last-child {
   text-align: right;
 }
 
@@ -106,15 +108,16 @@ th:last-child, td:last-child {
 .button-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.125rem;
+  gap: 1rem;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 @media (max-width: 640px) {
   .button-group {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.5rem;
   }
   
   .button-group button {
@@ -269,6 +272,7 @@ th:last-child, td:last-child {
 }
 
 @layer components {
+  .field-department { @apply text-blue-700; }
   .field-category { @apply text-purple-700; }
   .field-level { @apply text-green-700; }
   .field-target-name { @apply text-blue-700; }
@@ -277,18 +281,27 @@ th:last-child, td:last-child {
   .field-annual { @apply text-orange-700; }
   .field-total { @apply text-blue-700; }
   .field-current { @apply text-violet-700; }
+  .field-current-value { @apply text-teal-700; }
+  .field-status { @apply text-yellow-700; }
+  .field-completion-rate { @apply text-indigo-700; }
+  .field-quarter { @apply text-indigo-700; }
   .field-desc { @apply text-pink-700; }
   .field-actions { @apply text-gray-700; }
 
   /* 2025 表头背景色（按字段区分） */
+  .head-bg-department { @apply bg-blue-50; }
   .head-bg-category { @apply bg-purple-50; }
   .head-bg-level { @apply bg-green-50; }
   .head-bg-target-name { @apply bg-blue-50; }
   .head-bg-unit { @apply bg-teal-50; }
+  .head-bg-quarter { @apply bg-indigo-50; }
   .head-bg-owner { @apply bg-indigo-50; }
   .head-bg-annual { @apply bg-orange-50; }
   .head-bg-total { @apply bg-blue-50; }
   .head-bg-current { @apply bg-violet-50; }
+  .head-bg-current-value { @apply bg-teal-50; }
+  .head-bg-completion-rate { @apply bg-indigo-50; }
+  .head-bg-status { @apply bg-yellow-50; }
   .head-bg-desc { @apply bg-pink-50; }
   .head-bg-actions { @apply bg-gray-50; }
 
@@ -305,6 +318,18 @@ th:last-child, td:last-child {
   .head-bg-month-10 { @apply bg-amber-50; }
   .head-bg-month-11 { @apply bg-rose-50; }
   .head-bg-month-12 { @apply bg-purple-50; }
+
+  .annual-chart-head { @apply bg-gradient-to-b from-blue-50 to-indigo-50; }
+  .annual-chart-group-th { @apply bg-gradient-to-r from-blue-50/70 to-indigo-50/70; }
+  .annual-chart-subtotal-th { @apply bg-gradient-to-r from-indigo-50 to-purple-50; }
+  .annual-chart-subhead-th { @apply bg-gradient-to-b from-gray-50 to-gray-100 text-gray-600; }
+  .annual-chart-row { @apply hover:bg-blue-50/50 transition-colors; }
+  .annual-chart-row-alt { @apply odd:bg-white even:bg-blue-50/10; }
+
+  .dept-th-blue { @apply bg-gradient-to-r from-sky-50 to-blue-50; }
+  .dept-th-green { @apply bg-gradient-to-r from-emerald-50 to-green-50; }
+  .dept-th-orange { @apply bg-gradient-to-r from-amber-50 to-orange-50; }
+  .dept-th-purple { @apply bg-gradient-to-r from-violet-50 to-purple-50; }
 }
 
 /* 通用组件样式 */
@@ -486,6 +511,15 @@ th:last-child, td:last-child {
   }
 }
 
+/* 登录输入框自动填充样式统一 */
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(15, 23, 42, 0.4) inset;
+  -webkit-text-fill-color: #e0f2fe;
+  transition: background-color 9999s ease-out 0s;
+}
+
 /* 打印样式 */
 @media print {
   .no-print {
@@ -619,15 +653,12 @@ th:last-child, td:last-child {
 }
 
 .form-field-error {
-  @apply mt-1 text-xs text-red-600 bg-red-50 p-2 rounded border-l-2 border-red-400 flex items-center;
+  @apply mt-1 text-sm text-red-500 block;
 }
 
 
 
-/* 按钮组对齐 */
-.button-group {
-  @apply flex items-center justify-end space-x-4;
-}
+
 
 /* 卡片头部对齐 */
 .card-header {
@@ -736,4 +767,235 @@ th:last-child, td:last-child {
 /* 2025年度大事件记录：表头超过5字省略控制 */
 .th-limit-5ch thead .th-ellipsis.cell-limit {
   max-width: 5ch;
+}
+
+/* ============================================
+   统一数据表格样式 - 适用于所有管理页面
+   ============================================ */
+
+/* 统一表格容器 - 固定高度，带精致边框 */
+.unified-table-container {
+  @apply bg-white rounded-2xl shadow-xl overflow-hidden;
+  border: 2px solid #c7d2fe;
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+  box-shadow: 0 10px 40px -10px rgba(102, 126, 234, 0.2), 0 4px 6px -2px rgba(102, 126, 234, 0.1);
+}
+
+/* 表格内容区域 - 固定高度可滚动 */
+.unified-table-scroll {
+  max-height: 60vh;
+  min-height: 400px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* 统一表格基础样式 */
+.unified-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+/* 表头样式 - 精致渐变背景 */
+.unified-data-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.unified-data-table thead tr {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+}
+
+.unified-data-table thead th {
+  @apply px-4 py-3.5 text-left text-sm font-bold text-white;
+  border-bottom: 3px solid #4f46e5;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.unified-data-table thead th:last-child {
+  border-right: none;
+  text-align: center;
+}
+
+/* 数据行样式 - 带精致边框 */
+.unified-data-table tbody tr {
+  transition: all 0.25s ease;
+}
+
+.unified-data-table tbody tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.unified-data-table tbody tr:nth-child(even) {
+  background-color: #faf5ff;
+}
+
+.unified-data-table tbody tr:hover {
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #fdf4ff 100%);
+  transform: scale(1.002);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.18);
+  position: relative;
+  z-index: 1;
+}
+
+/* 单元格样式 - 带清晰边框 */
+.unified-data-table tbody td {
+  @apply px-4 py-3 text-sm text-gray-700;
+  border-right: 1px solid #e9d5ff;
+  border-bottom: 1px solid #e9d5ff;
+  vertical-align: middle;
+}
+
+.unified-data-table tbody td:first-child {
+  border-left: 1px solid #e9d5ff;
+}
+
+.unified-data-table tbody td:last-child {
+  border-right: 1px solid #e9d5ff;
+  text-align: center;
+}
+
+/* 操作列特殊样式 */
+.unified-data-table tbody td:last-child {
+  background: linear-gradient(135deg, #f8fafc 0%, #faf5ff 100%);
+}
+
+.unified-data-table tbody tr:hover td:last-child {
+  background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%);
+}
+
+/* 状态徽章统一样式 */
+.unified-data-table .status-badge {
+  @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+  border: 1px solid currentColor;
+  border-opacity: 0.3;
+}
+
+/* TableManager 组件统一样式覆盖 */
+.unified-table-wrapper {
+  @apply rounded-2xl overflow-hidden;
+  border: 2px solid #c7d2fe;
+  box-shadow: 0 10px 40px -10px rgba(102, 126, 234, 0.2), 0 4px 6px -2px rgba(102, 126, 234, 0.1);
+}
+
+.unified-table-wrapper > div:first-child {
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%) !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.unified-table-wrapper .bg-gradient-to-br {
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 修复嵌套表格容器边框 */
+.unified-table-wrapper .table-responsive {
+  max-height: 60vh;
+  min-height: 400px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* 统一操作按钮样式 */
+.unified-action-btn {
+  @apply p-2 rounded-lg transition-all duration-200;
+  border: 1px solid transparent;
+}
+
+.unified-action-btn:hover {
+  @apply shadow-md;
+  transform: translateY(-1px);
+}
+
+.unified-action-btn.view {
+  @apply text-gray-600 hover:text-gray-800 hover:bg-gray-100;
+  border-color: #d1d5db;
+}
+
+.unified-action-btn.edit {
+  @apply text-blue-600 hover:text-blue-800 hover:bg-blue-50;
+  border-color: #93c5fd;
+}
+
+.unified-action-btn.copy {
+  @apply text-green-600 hover:text-green-800 hover:bg-green-50;
+  border-color: #86efac;
+}
+
+.unified-action-btn.delete {
+  @apply text-red-600 hover:text-red-800 hover:bg-red-50;
+  border-color: #fca5a5;
+}
+
+/* 表格底部分页区域统一样式 */
+.unified-table-footer {
+  @apply px-6 py-4;
+  background: linear-gradient(135deg, #f8fafc 0%, #faf5ff 100%);
+  border-top: 2px solid #e9d5ff;
+}
+
+/* 空状态统一样式 */
+.unified-empty-state {
+  @apply flex flex-col items-center justify-center py-16;
+  min-height: 400px;
+  background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);
+}
+
+.unified-empty-state svg {
+  @apply w-16 h-16 text-purple-300 mb-4;
+}
+
+.unified-empty-state p {
+  @apply text-gray-500 text-lg;
+}
+
+/* 确保TableManager内部表格也应用统一样式 */
+.unified-table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.unified-table-wrapper table thead tr {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%) !important;
+}
+
+.unified-table-wrapper table thead th {
+  @apply px-4 py-3.5 text-left text-sm font-bold text-white;
+  border-bottom: 3px solid #4f46e5 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  background: transparent !important;
+}
+
+.unified-table-wrapper table thead th:last-child {
+  border-right: none !important;
+}
+
+.unified-table-wrapper table tbody td {
+  border-right: 1px solid #e9d5ff !important;
+  border-bottom: 1px solid #e9d5ff !important;
+}
+
+.unified-table-wrapper table tbody td:first-child {
+  border-left: 1px solid #e9d5ff !important;
+}
+
+.unified-table-wrapper table tbody tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.unified-table-wrapper table tbody tr:nth-child(even) {
+  background-color: #faf5ff;
+}
+
+.unified-table-wrapper table tbody tr:hover {
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #fdf4ff 100%) !important;
 }

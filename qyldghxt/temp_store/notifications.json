@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "category": "system",
+    "title": "系统通知",
+    "content": "2026年年度规划表已保存，共3条。",
+    "channels": {
+      "email": true,
+      "sms": false,
+      "dingtalk": true
+    },
+    "meta": {
+      "sheet": "planning",
+      "year": 2026
+    },
+    "status": "unread",
+    "created_at": "2025-12-16T04:39:35.679Z",
+    "read": true
+  },
+  {
+    "id": 2,
+    "category": "workNotice",
+    "title": "工作通知",
+    "content": "2026年5W2H行动计划已保存，共3条。",
+    "channels": {
+      "email": true,
+      "sms": false,
+      "dingtalk": true
+    },
+    "meta": {
+      "sheet": "action",
+      "year": 2026
+    },
+    "status": "unread",
+    "created_at": "2025-12-16T05:17:23.079Z",
+    "read": true
+  },
+  {
+    "id": 3,
+    "category": "workNotice",
+    "title": "工作通知",
+    "content": "2026年大事件提炼已保存，共5条。",
+    "channels": {
+      "email": true,
+      "sms": false,
+      "dingtalk": true
+    },
+    "meta": {
+      "sheet": "events",
+      "year": 2026
+    },
+    "status": "unread",
+    "created_at": "2025-12-16T05:17:36.309Z",
+    "read": true
+  },
+  {
+    "id": 4,
+    "category": "system",
+    "title": "系统通知",
+    "content": "2026年年度规划表已保存，共3条。",
+    "channels": {
+      "email": true,
+      "sms": false,
+      "dingtalk": true
+    },
+    "meta": {
+      "sheet": "planning",
+      "year": 2026
+    },
+    "status": "unread",
+    "created_at": "2025-12-16T05:17:39.021Z",
+    "read": true
+  }
+]

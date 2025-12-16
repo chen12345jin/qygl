@@ -54,6 +54,7 @@ const TableManager = ({
   ,pagination
 }) => {
   const [isAdding, setIsAdding] = useState(false)
+  const [isViewing, setIsViewing] = useState(false)
   const [formData, setFormData] = useState({})
   const [errors, setErrors] = useState({})
   const [alert, setAlert] = useState({ show: false, message: '', type: 'info' })
@@ -173,10 +174,6 @@ const TableManager = ({
     e.stopPropagation()
     
     // 阻止原生HTML5验证，使用我们的自定义验证
-    if (!e.target.checkValidity()) {
-      console.log('HTML5 validation failed')
-    }
-    
     // 执行自定义验证
     const isValid = validateForm()
     
@@ -213,8 +210,17 @@ const TableManager = ({
     setFormData({})
     setErrors({})
     setIsAdding(false)
+    setIsViewing(false)
     setAlert({ show: false, message: '', type: 'info' })
     if (onEditingChange) onEditingChange(null)
+  }
+
+  const handleView = (item) => {
+    setFormData(item)
+    setIsViewing(true)
+    setIsAdding(true)
+    setErrors({})
+    setAlert({ show: false, message: '', type: 'info' })
   }
 
   const handleEdit = (item) => {
@@ -275,42 +281,77 @@ const TableManager = ({
           />
         )}
         <div className="form-grid gap-6">
-          {columns.map(column => (
-          <FormField
-            key={column.key}
-            name={column.key}
-            label={column.label}
-            type={column.type || 'text'}
-            value={column.valueParser ? column.valueParser(formData[column.key], formData) : (formData[column.key] || '')}
-            onChange={(value) => {
-              if (column.onChange) {
-                column.onChange(value, setFormData, formData);
-              } else {
-                setFormData({ ...formData, [column.key]: value });
-              }
-              if (errors[column.key]) {
-                setErrors({ ...errors, [column.key]: '' });
-              }
-            }}
-            required={column.required}
-            options={column.options}
-            error={errors[column.key]}
-            hint={column.hint}
-            rows={column.type === 'textarea' ? 3 : undefined}
-            step={column.type === 'number' ? '0.01' : undefined}
-            disabled={column.disabled}
-          />
-          ))}
+          {columns.map(column => {
+            // 如果定义了 customField，使用自定义字段
+            if (column.type === 'custom' && column.customField) {
+              return (
+                <div key={column.key} className="form-field-container">
+                  <label className="form-field-label">
+                    {column.label}
+                    {column.required && <span className="text-red-500 ml-1">*</span>}
+                  </label>
+                  {column.customField({
+                    value: (formData[column.key] !== undefined && formData[column.key] !== null && !Number.isNaN(formData[column.key]) ? formData[column.key] : ''),
+                    onChange: (value) => {
+                      if (column.onChange) {
+                        column.onChange(value, setFormData, formData);
+                      } else {
+                        setFormData({ ...formData, [column.key]: value });
+                      }
+                      if (errors[column.key]) {
+                        setErrors({ ...errors, [column.key]: '' });
+                      }
+                    },
+                    formData,
+                    setFormData,
+                    error: errors[column.key]
+                  })}
+                  {errors[column.key] && (
+                    <div className="form-field-error">{errors[column.key]}</div>
+                  )}
+                </div>
+              )
+            }
+            // 否则使用默认的 FormField
+            return (
+              <FormField
+                key={column.key}
+                name={column.key}
+                label={column.label}
+                type={column.type || 'text'}
+                value={column.valueParser ? column.valueParser(formData[column.key], formData) : (formData[column.key] !== undefined && formData[column.key] !== null && !Number.isNaN(formData[column.key]) ? formData[column.key] : '')}
+                onChange={(value) => {
+                  if (column.onChange) {
+                    column.onChange(value, setFormData, formData);
+                  } else {
+                    setFormData({ ...formData, [column.key]: value });
+                  }
+                  if (errors[column.key]) {
+                    setErrors({ ...errors, [column.key]: '' });
+                  }
+                }}
+                required={!!column.required}
+                options={column.options}
+                error={errors[column.key]}
+                hint={column.hint}
+                rows={column.type === 'textarea' ? 3 : undefined}
+                step={column.type === 'number' ? '0.01' : undefined}
+                disabled={column.disabled || isViewing}
+              />
+            )
+          })}
         </div>
       </div>
       <div className="sticky bottom-0 flex justify-end space-x-3 p-4 border-t border-gray-200 bg-white/95 backdrop-blur z-10">
         <button type="button" onClick={resetForm} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          取消
+          {isViewing ? '关闭' : '取消'}
         </button>
+        {!isViewing && (
         <button type="submit" className={`px-4 py-2 bg-gradient-to-r ${addTheme} text-white rounded-lg transition-colors flex items-center space-x-2`}>
           <Save size={18} />
           <span>{editingId ? `更新${title.replace('管理', '').replace('设置', '')}` : `保存${title.replace('管理', '').replace('设置', '')}`}</span>
         </button>
+        )}
       </div>
     </form>
   )
@@ -349,7 +390,7 @@ const TableManager = ({
           <div className={`relative p-6 border-b border-gray-200 bg-gradient-to-r ${addTheme} shrink-0 z-10 flex items-center justify-between`}>
               <div className="flex items-center justify-between gap-3 w-full mr-8">
                 <div className="min-w-0">
-                  <div className="text-2xl font-bold text-white truncate">{editingId ? (editHeader || `编辑${title.replace('管理', '').replace('设置', '')}`) : (addHeader || `新增${title.replace('管理', '').replace('设置', '')}`)}</div>
+                  <div className="text-2xl font-bold text-white truncate">{isViewing ? `查看${title.replace('管理', '').replace('设置', '')}` : (editingId ? (editHeader || `编辑${title.replace('管理', '').replace('设置', '')}`) : (addHeader || `新增${title.replace('管理', '').replace('设置', '')}`))}</div>
                   {addSubHeader && <div className="text-white/80 mt-1 text-sm truncate">{addSubHeader}</div>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -375,7 +416,7 @@ const TableManager = ({
       {isAdding && addMode === 'inline' && (
         <div className="card">
           <div className="px-6 pt-6">
-            <div className="text-2xl font-semibold text-gray-800">{editingId ? (editHeader || `编辑${title.replace('管理', '').replace('设置', '')}`) : (addHeader || `新增${title.replace('管理', '').replace('设置', '')}`)}</div>
+            <div className="text-2xl font-semibold text-gray-800">{isViewing ? `查看${title.replace('管理', '').replace('设置', '')}` : (editingId ? (editHeader || `编辑${title.replace('管理', '').replace('设置', '')}`) : (addHeader || `新增${title.replace('管理', '').replace('设置', '')}`))}</div>
             {addSubHeader && <div className="text-gray-500 mt-1 text-sm">{addSubHeader}</div>}
           </div>
           {renderForm()}
@@ -427,7 +468,7 @@ const TableManager = ({
                       const rowClass = rowColorBy ? (rowColorMap[item[rowColorBy]] || '') : ''
                       const useEllipsis = ellipsisAll || (Array.isArray(ellipsisKeys) && ellipsisKeys.includes(column.key))
                       const cellClass = singleLineNoEllipsis
-                        ? 'overflow-hidden whitespace-nowrap'
+                        ? 'truncate'
                         : useEllipsis
                           ? 'text-ellipsis cell-limit'
                           : (column.key.includes('name') || column.key.includes('title')
@@ -453,7 +494,7 @@ const TableManager = ({
                       <td className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : 'px-6 py-4'} text-center border-r border-gray-100/50 last:border-r-0 ${rowColorBy ? (rowColorMap[item[rowColorBy]] || '') : ''}`}>
                         <div className="flex items-center justify-center gap-2 flex-wrap">
                           <button
-                            onClick={() => (onView ? onView(item) : handleEdit(item))}
+                            onClick={() => (onView ? onView(item) : handleView(item))}
                             className={`text-gray-700 hover:text-gray-900 transition-all duration-300 transform hover:scale-110 group-hover:bg-gray-50/50 ${ultraCompact ? 'p-1' : compact ? 'p-1' : 'p-2'} rounded-lg`}
                             title="查看"
                           >

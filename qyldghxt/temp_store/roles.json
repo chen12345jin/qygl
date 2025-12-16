@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "created_at": "2025-12-16T02:30:39.958Z",
+    "name": "用户",
+    "code": "user",
+    "description": "",
+    "permissions": [
+      "view_reports"
+    ]
+  },
+  {
+    "id": 2,
+    "created_at": "2025-12-16T04:56:09.923Z",
+    "name": "2",
+    "code": "22",
+    "description": "",
+    "permissions": [
+      "department_targets"
+    ]
+  }
+]

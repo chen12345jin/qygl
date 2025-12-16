@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useData } from '../contexts/DataContext'
 import { useSocket } from '../contexts/SocketContext'
 import { useNavigate } from 'react-router-dom'
-import { formatDate } from '../utils/locale.js'
+import { formatDate, getLocalePrefs } from '../utils/locale.js'
 
 const Header = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth()
@@ -13,7 +13,21 @@ const Header = ({ onToggleSidebar }) => {
   const navigate = useNavigate()
   const [unread, setUnread] = React.useState(0)
   const [today, setToday] = React.useState('')
-  const weekNames = ['周日','周一','周二','周三','周四','周五','周六']
+
+  const computeToday = React.useCallback(() => {
+    try {
+      const { language, timeZone } = getLocalePrefs()
+      const s = formatDate(new Date(), { year: 'numeric', month: 'long', day: 'numeric' })
+      const weekday = new Intl.DateTimeFormat(language, { weekday: 'long', timeZone }).format(new Date())
+      const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', hour12: false, timeZone }).format(new Date())
+      setToday(`${s} ${weekday} ${time}`)
+    } catch {
+      const d = new Date()
+      const hh = String(d.getHours()).padStart(2,'0')
+      const mm = String(d.getMinutes()).padStart(2,'0')
+      setToday(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${hh}:${mm}`)
+    }
+  }, [])
 
   React.useEffect(() => {
     const load = async () => {
@@ -33,14 +47,11 @@ const Header = ({ onToggleSidebar }) => {
   }, [])
 
   React.useEffect(() => {
-    try {
-      const s = formatDate(new Date(), { year: 'numeric', month: 'long', day: 'numeric' })
-      setToday(s)
-    } catch {
-      const d = new Date()
-      setToday(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
-    }
-  }, [])
+    computeToday()
+    const handler = () => computeToday()
+    if (typeof window !== 'undefined') window.addEventListener('localeChanged', handler)
+    return () => { if (typeof window !== 'undefined') window.removeEventListener('localeChanged', handler) }
+  }, [computeToday])
 
   const handleLogout = () => {
     logout()
@@ -67,7 +78,7 @@ const Header = ({ onToggleSidebar }) => {
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2 px-3 py-1 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 text-blue-700 shadow-sm hover:shadow-md transition-shadow">
             <Calendar size={16} className="text-blue-600" />
-            <span className="font-medium">{today ? `${today} ${weekNames[new Date().getDay()]}` : ''}</span>
+            <span className="font-medium">{today}</span>
           </div>
           <button 
             onClick={() => navigate('/system/notifications')}

@@ -19,6 +19,7 @@ const Login = () => {
     password: ''
   })
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberPassword, setRememberPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const passwordRef = useRef(null)
 
@@ -28,6 +29,25 @@ const Login = () => {
       navigate('/dashboard', { replace: true })
     }
   }, [isAuthenticated, navigate])
+
+  // 从localStorage读取保存的用户名、密码和记住密码设置
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('SAVED_USERNAME')
+    const savedPassword = localStorage.getItem('SAVED_PASSWORD')
+    const rememberPasswordSetting = localStorage.getItem('REMEMBER_PASSWORD')
+    
+    if (savedUsername) {
+      setFormData(prev => ({
+        ...prev,
+        username: savedUsername,
+        password: savedPassword || ''
+      }))
+    }
+    
+    if (rememberPasswordSetting) {
+      setRememberPassword(rememberPasswordSetting === 'true')
+    }
+  }, [])
 
   useEffect(() => {
     if (import.meta.env.PROD) {
@@ -39,11 +59,15 @@ const Login = () => {
   }, [navigate])
 
   const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    const { name, value, type, checked } = e.target
+    if (type === 'checkbox') {
+      setRememberPassword(checked)
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }))
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -59,6 +83,16 @@ const Login = () => {
     try {
       const success = await login(formData.username, formData.password)
       if (success) {
+        localStorage.setItem('SAVED_USERNAME', formData.username)
+        
+        if (rememberPassword) {
+          localStorage.setItem('REMEMBER_PASSWORD', 'true')
+          localStorage.setItem('SAVED_PASSWORD', formData.password)
+        } else {
+          localStorage.setItem('REMEMBER_PASSWORD', 'false')
+          localStorage.removeItem('SAVED_PASSWORD')
+        }
+        
         toast.success('登录成功！')
         // 登录成功后导航到仪表盘
         navigate('/dashboard', { replace: true })
@@ -115,7 +149,8 @@ const Login = () => {
                     }
                   }}
                   autoFocus
-                  className="w-full px-12 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-blue-200/60 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent transition-all duration-200 backdrop-blur-sm"
+                  autoComplete="username"
+                  className="login-input w-full px-12 py-4 bg-white/5 border border-white/20 rounded-xl text-blue-100 placeholder-blue-200/60 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent focus:bg-white/5 transition-all duration-200 backdrop-blur-sm"
                   placeholder="请输入用户名"
                 />
               </div>
@@ -136,7 +171,8 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleChange}
                   ref={passwordRef}
-                  className="w-full px-12 py-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-blue-200/60 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent transition-all duration-200 backdrop-blur-sm pr-12"
+                  autoComplete="current-password"
+                  className="login-input w-full px-12 py-4 bg-white/5 border border-white/20 rounded-xl text-blue-100 placeholder-blue-200/60 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent focus:bg-white/5 transition-all duration-200 backdrop-blur-sm pr-12"
                   placeholder="请输入密码"
                 />
                 <button
@@ -150,6 +186,22 @@ const Login = () => {
                     <Eye className="h-5 w-5" />
                   )}
                 </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-password"
+                  name="remember-password"
+                  type="checkbox"
+                  checked={rememberPassword}
+                  onChange={handleChange}
+                  className="h-4 w-4 text-blue-500 bg-white/5 border-white/20 rounded focus:ring-blue-400/50 focus:ring-offset-0 focus:outline-none"
+                />
+                <label htmlFor="remember-password" className="ml-2 block text-sm text-blue-200">
+                  记住密码
+                </label>
               </div>
             </div>
 

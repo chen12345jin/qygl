@@ -19,7 +19,9 @@ import {
   ChevronRight,
   Menu,
   Info,
-  GitBranch
+  GitBranch,
+  Bell,
+  Database
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { appVersion } from '../version'
@@ -38,6 +40,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
     { id: 'major-events', icon: AlertTriangle, label: '大事件提炼', path: '/major-events', perm: '数据查看' },
     { id: 'monthly-progress', icon: TrendingUp, label: '月度推进计划', path: '/monthly-progress', perm: '数据查看' },
     { id: 'action-plans', icon: CheckSquare, label: '5W2H行动计划', path: '/action-plans', perm: '数据查看' },
+    { id: 'score-and-output', icon: Database, label: '积分 & 产值', path: '/score-and-output', perm: 'admin' },
     { id: 'data-analysis', icon: BarChart, label: '数据分析', path: '/data-analysis', perm: '数据查看' },
   ]
 
@@ -46,8 +49,12 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
     { id: 'departments', icon: Building2, label: '部门管理', path: '/system/departments', perm: '系统管理' },
     { id: 'employees', icon: Users, label: '员工管理', path: '/system/employees', perm: '系统管理' },
     { id: 'org-structure', icon: GitBranch, label: '组织架构', path: '/system/org-structure', perm: '系统管理' },
-    { id: 'users', icon: Shield, label: '用户权限', path: '/system/users', perm: '用户管理' },
+    { id: 'roles', icon: Shield, label: '角色管理', path: '/system/roles', perm: '系统管理' },
+    { id: 'users', icon: Users, label: '用户管理', path: '/system/users', perm: '用户管理' },
+    { id: 'logs', icon: FileText, label: '系统日志', path: '/system/logs', perm: '系统管理' },
+
     { id: 'templates', icon: FileText, label: '模板设置', path: '/system/templates', perm: '系统管理' },
+    { id: 'dingtalk', icon: Bell, label: '钉钉集成', path: '/system/dingtalk', perm: '系统管理' },
     { id: 'settings', icon: Settings, label: '系统设置', path: '/system/settings', perm: '系统管理' },
   ]
 

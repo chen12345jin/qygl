@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AlertCircle, ChevronDown } from 'lucide-react';
 
 const FormField = ({ 
@@ -13,10 +13,14 @@ const FormField = ({
   disabled = false,
   options = [], // for select type
   className = '',
-  hint = '' // 内联提示文本
+  hint = '', // 内联提示文本
+  min,
+  max
 }) => {
   const [focused, setFocused] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   const handleFocus = () => {
     setFocused(true);
@@ -27,6 +31,21 @@ const FormField = ({
     setFocused(false);
     if (hint && !error) setShowHint(false);
   };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const baseInputClasses = `
     w-full px-3 py-2 border rounded-md transition-all duration-200 placeholder-gray-400 pr-10
@@ -39,26 +58,45 @@ const FormField = ({
   const renderInput = () => {
     switch (type) {
       case 'select':
+        const selectedOption = options.find(opt => opt.value === value) || null;
+        const displayText = selectedOption ? selectedOption.label : placeholder || '请选择...';
+        
         return (
-          <div className="relative">
-            <select
+          <div className="relative w-full" ref={dropdownRef}>
+            <button
+              type="button"
               id={`ff-${name}`}
-              name={name}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onClick={() => !disabled && setIsOpen(!isOpen)}
               onFocus={handleFocus}
               onBlur={handleBlur}
               disabled={disabled}
-              className={`${baseInputClasses} appearance-none h-10 shadow-sm`}
+              className={`w-full h-10 px-3 border rounded-md transition-all duration-200 placeholder-gray-400 pr-10 focus:outline-none
+                ${focused ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-300'}
+                ${error ? 'border-red-500 ring-2 ring-red-200' : ''}
+                ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white hover:border-gray-400'}
+                flex items-center justify-between text-left`}
             >
-              <option value="">{placeholder || '请选择...'}</option>
-              {options.map((option, index) => (
-                <option key={`${option.value}-${index}`} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <span className={selectedOption ? 'text-gray-800' : 'text-gray-500'}>
+                {displayText}
+              </span>
+              <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && !disabled && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                {options.map((option, index) => (
+                  <div
+                    key={`${option.value}-${index}`}
+                    className={`px-3 py-2 text-sm cursor-pointer transition-colors ${value === option.value ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-100 text-gray-700'}`}
+                    onClick={() => {
+                      onChange(option.value);
+                      setIsOpen(false);
+                    }}
+                  >
+                    {option.label}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       case 'textarea':
@@ -89,6 +127,8 @@ const FormField = ({
             placeholder={placeholder}
             disabled={disabled}
             className={baseInputClasses}
+            min={min}
+            max={max}
           />
         );
     }
@@ -105,18 +145,8 @@ const FormField = ({
         {renderInput()}
         
         {hint && (
-          <div className="form-field-hint-wrapper">
-            <AlertCircle 
-              size={16} 
-              className="form-field-hint-icon"
-              onMouseEnter={() => setShowHint(true)}
-              onMouseLeave={() => setShowHint(false)}
-            />
-            {showHint && (
-              <div className="form-field-hint-text">
-                {hint}
-              </div>
-            )}
+          <div className="text-xs text-gray-500 mt-1">
+            {hint}
           </div>
         )}
       </div>

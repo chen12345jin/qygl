@@ -11,7 +11,8 @@ const targetReleaseRoot = path.join(versionRoot, 'release')
 // Electron Builder outputs client artifacts into client/release_final
 const sourceReleaseDir = path.join(process.cwd(), 'client', 'release_final')
 const frontendDst = targetReleaseRoot
-// Backend is already handled by build-backend.js into targetReleaseRoot/server
+// Backend artifacts are prepared separately into targetReleaseRoot/server
+const updatesDst = path.join(process.cwd(), 'server', 'updates')
 
 function ensureDir(p) { fs.mkdirSync(p, { recursive: true }) }
 
@@ -57,6 +58,7 @@ function flattenIfNestedClient(dst) {
 ensureDir(versionRoot)
 ensureDir(targetReleaseRoot)
 ensureDir(frontendDst)
+ensureDir(updatesDst)
 
 // Move Electron Builder output (release folder)
 if (fs.existsSync(sourceReleaseDir) && fs.readdirSync(sourceReleaseDir).length > 0) {
@@ -66,6 +68,19 @@ if (fs.existsSync(sourceReleaseDir) && fs.readdirSync(sourceReleaseDir).length >
   flattenIfNestedClient(frontendDst)
 } else {
   console.warn('⚠️ No release folder found. Frontend build might have failed or skipped.')
+}
+
+const clientReleaseDir = path.join(process.cwd(), 'azb', version, 'release', 'client')
+if (fs.existsSync(clientReleaseDir)) {
+  const files = fs.readdirSync(clientReleaseDir)
+  for (const name of files) {
+    if (name.endsWith('.exe') || name === 'latest.yml') {
+      const src = path.join(clientReleaseDir, name)
+      const dst = path.join(updatesDst, name)
+      fs.copyFileSync(src, dst)
+      console.log(`Copied update artifact ${name} to ${updatesDst}`)
+    }
+  }
 }
 
 // write version files under version folder

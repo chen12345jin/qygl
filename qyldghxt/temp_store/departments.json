@@ -1,0 +1,533 @@
+[
+  {
+    "id": 1,
+    "name": "计划部",
+    "code": "483018387",
+    "parent_id": 41,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 2,
+    "name": "亚马逊一部",
+    "code": "124652323",
+    "parent_id": 59,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 3,
+    "name": "品管部",
+    "code": "595429435",
+    "parent_id": 5,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 4,
+    "name": "设计部",
+    "code": "124617232",
+    "parent_id": 55,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 5,
+    "name": "品控中心",
+    "code": "898693480",
+    "parent_id": 41,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 6,
+    "name": "钉钉部署",
+    "code": "546198974",
+    "parent_id": null,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 7,
+    "name": "外部人员",
+    "code": "548893601",
+    "parent_id": null,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 8,
+    "name": "新媒体",
+    "code": "996808373",
+    "parent_id": 51,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 9,
+    "name": "业绩部门",
+    "code": "1038925903",
+    "parent_id": null,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 10,
+    "name": "职能部门",
+    "code": "1038942828",
+    "parent_id": null,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 11,
+    "name": "B团队",
+    "code": "546637896",
+    "parent_id": 2,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 12,
+    "name": "行政部",
+    "code": "547105024",
+    "parent_id": 42,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 13,
+    "name": "A团队",
+    "code": "547171002",
+    "parent_id": 2,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 14,
+    "name": "人事部",
+    "code": "595362415",
+    "parent_id": 42,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 15,
+    "name": "外协",
+    "code": "610296678",
+    "parent_id": 7,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 16,
+    "name": "客户",
+    "code": "622059672",
+    "parent_id": 7,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 17,
+    "name": "供应商",
+    "code": "622566047",
+    "parent_id": 7,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 18,
+    "name": "裁剪部",
+    "code": "641486824",
+    "parent_id": 53,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 19,
+    "name": "后道车间",
+    "code": "641693640",
+    "parent_id": 53,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 20,
+    "name": "缝制车间",
+    "code": "641808385",
+    "parent_id": 53,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 21,
+    "name": "亚马逊电商二部",
+    "code": "695638217",
+    "parent_id": 59,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 22,
+    "name": "临时组",
+    "code": "707224979",
+    "parent_id": 20,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 23,
+    "name": "吊挂组",
+    "code": "707372676",
+    "parent_id": 20,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 24,
+    "name": "第一组",
+    "code": "707523443",
+    "parent_id": 20,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 25,
+    "name": "阿里部",
+    "code": "810991581",
+    "parent_id": 51,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 26,
+    "name": "设计组",
+    "code": "811127438",
+    "parent_id": 51,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 27,
+    "name": "生产组",
+    "code": "823927464",
+    "parent_id": 50,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 28,
+    "name": "技术部",
+    "code": "898434806",
+    "parent_id": 50,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 29,
+    "name": "物控部",
+    "code": "898435939",
+    "parent_id": 5,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 30,
+    "name": "IE部",
+    "code": "898519752",
+    "parent_id": 50,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 31,
+    "name": "配送部",
+    "code": "898581659",
+    "parent_id": 53,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 32,
+    "name": "外协部",
+    "code": "898586664",
+    "parent_id": 53,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 33,
+    "name": "视觉部",
+    "code": "898775425",
+    "parent_id": 55,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 34,
+    "name": "工艺组",
+    "code": "939520612",
+    "parent_id": 50,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 35,
+    "name": "生管组",
+    "code": "991037350",
+    "parent_id": 50,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 36,
+    "name": "配送组",
+    "code": "1038609989",
+    "parent_id": 41,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 37,
+    "name": "仓储部",
+    "code": "1038745752",
+    "parent_id": 55,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 38,
+    "name": "交付中心",
+    "code": "1038753971",
+    "parent_id": 9,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 39,
+    "name": "总经办",
+    "code": "1038829888",
+    "parent_id": 52,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 40,
+    "name": "监委",
+    "code": "1038891720",
+    "parent_id": 52,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 41,
+    "name": "常规生产线",
+    "code": "1038902763",
+    "parent_id": 56,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 42,
+    "name": "人政中心",
+    "code": "1038936846",
+    "parent_id": 52,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 43,
+    "name": "国外营销部",
+    "code": "1038958850",
+    "parent_id": 59,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 44,
+    "name": "财务中心",
+    "code": "1038981778",
+    "parent_id": 52,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 45,
+    "name": "发改委",
+    "code": "1038991841",
+    "parent_id": 52,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 46,
+    "name": "生产中心",
+    "code": "1038996900",
+    "parent_id": 9,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 47,
+    "name": "1688部",
+    "code": "1039021791",
+    "parent_id": 59,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 48,
+    "name": "外协",
+    "code": "1039130258",
+    "parent_id": 41,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 49,
+    "name": "采购部",
+    "code": "1039163177",
+    "parent_id": 55,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 50,
+    "name": "快反生产线",
+    "code": "1039167167",
+    "parent_id": 57,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 51,
+    "name": "国内营销部",
+    "code": "1039226092",
+    "parent_id": 58,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 52,
+    "name": "泉州八爪鱼智能科技有限公司",
+    "code": "1039226410",
+    "parent_id": 10,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 53,
+    "name": "生产部",
+    "code": "1039227085",
+    "parent_id": 41,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 54,
+    "name": "营销中心",
+    "code": "1039240062",
+    "parent_id": 9,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 55,
+    "name": "泉州巴乐乐伊供应链有限公司",
+    "code": "1039286403",
+    "parent_id": 38,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 56,
+    "name": "泉州太禾服饰有限公司",
+    "code": "1039292390",
+    "parent_id": 46,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 57,
+    "name": "泉州太嗨服饰有限公司",
+    "code": "1039348240",
+    "parent_id": 46,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 58,
+    "name": "泉州太米贸易有限公司",
+    "code": "1039442170",
+    "parent_id": 54,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  },
+  {
+    "id": 59,
+    "name": "泉州太匠智能科技有限公司",
+    "code": "1039485150",
+    "parent_id": 54,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-16T08:20:54.935Z"
+  }
+]

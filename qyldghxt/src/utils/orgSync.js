@@ -35,3 +35,36 @@ export const buildOrgTreeWithEmployees = (departments, employees) => {
   const withEmployees = attachEmployeesToDepartments([...departments], employees)
   return buildTree(withEmployees)
 }
+
+// Recursively merge employees into the tree as nodes (children)
+export const mergeEmployeesAsNodes = (nodes, employees) => {
+  return nodes.map(node => {
+    // Find employees belonging to this node (department/company)
+    const nodeEmployees = employees.filter(emp => {
+      const empDept = emp.department || emp.deptName || ''
+      return empDept === node.name
+    }).map(emp => ({
+      ...emp,
+      id: `user-${emp.id}`, // Avoid ID collision with departments
+      originalId: emp.id,
+      name: emp.name || emp.username || emp.employee_name,
+      type: 'USER',
+      children: []
+    }))
+    
+    // Process children nodes recursively
+    const childrenNodes = node.children && node.children.length > 0 
+      ? mergeEmployeesAsNodes(node.children, employees) 
+      : []
+      
+    // Combine children nodes (sub-departments) and employee nodes
+    // Sort: Departments/Companies first, then Employees
+    const allChildren = [...childrenNodes, ...nodeEmployees]
+    
+    return {
+      ...node,
+      uniqueKey: `dept-${node.id}`,
+      children: allChildren
+    }
+  })
+}

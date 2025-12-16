@@ -2,16 +2,16 @@ import React, { createContext, useContext, useState } from 'react';
 
 const FormValidationContext = createContext();
 
-// 13个模块的必填字段配置（排除备注字段）
+// 13个模块的必填字段配置（排除备注字段和实际相关字段）
 const REQUIRED_FIELDS_CONFIG = {
   // 1. 首页概览
   dashboard: ['year', 'department', 'status'],
   
   // 2. 部门目标分解
-  departmentTargets: ['department', 'targetLevel', 'targetType', 'targetName', 'targetValue', 'unit', 'quarter', 'month', 'currentValue', 'responsible'],
+  departmentTargets: ['department', 'target_level', 'target_type', 'target_value', 'unit', 'quarter', 'month', 'responsible_person'],
   
   // 3. 年度规划表
-  annualPlanning: ['planType', 'planName', 'startDate', 'endDate', 'department', 'responsible'],
+  annualPlanning: ['plan_name', 'department', 'category', 'priority', 'start_date', 'end_date', 'budget', 'expected_result', 'responsible_person'],
   
   // 4. 年度规划图表
   annualPlanningChart: ['chartType', 'dataSource', 'timeRange'],
@@ -20,13 +20,13 @@ const REQUIRED_FIELDS_CONFIG = {
   annualWorkPlan: ['planName', 'department', 'startDate', 'endDate', 'responsible', 'priority'],
   
   // 6. 重大事项
-  majorEvents: ['eventName', 'eventType', 'startDate', 'endDate', 'responsible', 'priority'],
+  majorEvents: ['event_name', 'event_type', 'importance', 'responsible_department'],
   
   // 7. 月度进展
-  monthlyProgress: ['month', 'department', 'planName', 'progress', 'status'],
+  monthlyProgress: ['task_name', 'department', 'responsible_person', 'status', 'start_date', 'end_date'],
   
   // 8. 行动计划
-  actionPlans: ['actionName', 'department', 'startDate', 'endDate', 'responsible'],
+  actionPlans: ['goal', 'start_date', 'end_date', 'what', 'who', 'how', 'why', 'how_much', 'department', 'priority', 'status', 'progress', 'expected_result'],
   
   // 9. 数据分析
   dataAnalysis: ['analysisType', 'dataSource', 'timeRange'],
@@ -217,11 +217,21 @@ export const FormValidationProvider = ({ children }) => {
   );
 };
 
-export const useFormValidation = () => {
+export const useFormValidation = (moduleName) => {
   const context = useContext(FormValidationContext);
   if (!context) {
     throw new Error('useFormValidation must be used within a FormValidationProvider');
   }
+
+  if (moduleName) {
+    return {
+      ...context,
+      validateField: (fieldName, value) => context.validateFieldRealtime(fieldName, value, moduleName),
+      validateForm: (formData) => context.validateForm(formData, moduleName).isValid,
+      clearErrors: context.clearAllErrors
+    };
+  }
+
   return context;
 };
 

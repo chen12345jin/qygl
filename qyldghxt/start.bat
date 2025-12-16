@@ -11,7 +11,7 @@
 echo Starting Enterprise Annual Planning System...
 cd /d %~dp0
 echo Current directory: %CD%
-start cmd /k "cd /d %CD% && node server.js"
+start cmd /k "cd /d %CD% && node server/index.js"
 timeout /t 3 /nobreak
 start cmd /k "cd /d %CD% && npm run dev"
 echo Backend server running on http://localhost:5004

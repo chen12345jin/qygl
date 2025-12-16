@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useData } from '../contexts/DataContext'
-import { BarChart3, TrendingUp, DollarSign, Target, Calendar, Users, Building2, AlertTriangle, CheckSquare } from 'lucide-react'
+import { BarChart3, TrendingUp, TrendingDown, Minus, DollarSign, Target, Calendar, Users, Building2, AlertTriangle, CheckSquare } from 'lucide-react'
 import PageHeaderBanner from '../components/PageHeaderBanner'
+import { formatNumber, getLocalePrefs } from '../utils/locale.js'
 import { 
   BarChart, 
   Bar, 
@@ -18,52 +19,122 @@ import {
   ResponsiveContainer 
 } from 'recharts'
 
+import Pagination from '../components/Pagination'
+
 const DataAnalysis = () => {
   const { 
+    globalYear, setGlobalYear, // 获取全局年份和设置方法
     getDepartmentTargets, 
     getMajorEvents, 
     getMonthlyProgress,
     getAnnualWorkPlans,
+    getActionPlans,
     getDepartments,
     getEmployees
   } = useData()
   
+  // 年份相关状态
+  const selectedYear = globalYear
+  const setSelectedYear = setGlobalYear
+  const [years, setYears] = useState([2024, 2025, 2026])
+  
   const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 10 })
   const [targets, setTargets] = useState([])
   const [events, setEvents] = useState([])
   const [progress, setProgress] = useState([])
   const [plans, setPlans] = useState([])
+  const [actions, setActions] = useState([])
   const [departments, setDepartments] = useState([])
   const [employees, setEmployees] = useState([])
+  const [completionStats, setCompletionStats] = useState({
+    overall: { rate: 0, completed: 0, total: 0 }
+  })
 
   useEffect(() => {
     loadData()
+  }, [globalYear]) // 监听年份变化
+
+  // 监听实时数据更新事件
+  useEffect(() => {
+    const handleDataUpdate = (event) => {
+      const { detail } = event;
+      // 当任何相关数据发生变化时，重新加载数据
+      if (['departmentTargets', 'majorEvents', 'monthlyProgress', 'annualWorkPlans', 'actionPlans'].includes(detail.room)) {
+        loadData();
+      }
+    };
+
+    // 添加事件监听器
+    window.addEventListener('dataUpdated', handleDataUpdate);
+
+    // 组件卸载时移除事件监听器
+    return () => {
+      window.removeEventListener('dataUpdated', handleDataUpdate);
+    };
   }, [])
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const currentYear = new Date().getFullYear()
-      const [targetsRes, eventsRes, progressRes, plansRes, deptsRes, empsRes] = await Promise.all([
-        getDepartmentTargets({ year: currentYear }),
-        getMajorEvents(),
-        getMonthlyProgress({ year: currentYear }),
-        getAnnualWorkPlans(),
+      // 使用全局年份而非当前系统年份
+      const [targetsRes, eventsRes, progressRes, plansRes, actionsRes, deptsRes, empsRes] = await Promise.all([
+        getDepartmentTargets({ year: globalYear }),
+        getMajorEvents({ year: globalYear }),
+        getMonthlyProgress({ year: globalYear }),
+        getAnnualWorkPlans({ year: globalYear }),
+        getActionPlans({ year: globalYear }),
         getDepartments(),
         getEmployees()
       ])
 
-      setTargets(targetsRes.data || [])
-      setEvents(eventsRes.data || [])
-      setProgress(progressRes.data || [])
-      setPlans(plansRes.data || [])
-      setDepartments(deptsRes.data || [])
+      const t = targetsRes.data || []
+      const e = eventsRes.data || []
+      const p = progressRes.data || []
+      const pl = plansRes.data || []
+      const a = actionsRes.data || []
+
+      setTargets(t)
+      setEvents(e)
+      setProgress(p)
+      setPlans(pl)
+      setActions(a)
+      // 过滤掉包含"公司"的部门节点，避免在图表和表格中显示公司层级数据
+      setDepartments((deptsRes.data || []).filter(d => !d.name.includes('公司')))
       setEmployees(empsRes.data || [])
+
+      calculateCompletionStats(pl, t, p, e, a)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  // 计算各模块完成度统计
+  const calculateCompletionStats = (annualPlans, targets, monthlyProgress, majorEvents, actionPlans) => {
+    // 总目标完成率 - 使用实际值/目标值的比例
+    const totalTargetValue = targets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+    const totalActualValue = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+    const overallRate = totalTargetValue > 0 ? Math.round((totalActualValue / totalTargetValue) * 100) : 0
+    
+    // 计算计划完成数 - 统计所有已完成的项目
+    const totalCompleted = targets.filter(t => {
+      const targetVal = Number(t.target_value) || 0
+      const currentVal = Number(t.current_value) || 0
+      return targetVal > 0 && currentVal >= targetVal
+    }).length
+    
+    // 计算总项目数
+    const totalItems = targets.length
+
+    setCompletionStats({
+      overall: {
+        total: totalItems,
+        completed: totalCompleted,
+        rate: overallRate
+      }
+    })
   }
 
   // 按月份的销售数据（补齐 1-12 月）
@@ -73,8 +144,8 @@ const DataAnalysis = () => {
       if (!acc[monthNum]) {
         acc[monthNum] = { month: `${monthNum}月`, amount: 0, profit: 0 }
       }
-      acc[monthNum].amount += Number(target.sales_amount) || 0
-      acc[monthNum].profit += Number(target.profit) || 0
+      acc[monthNum].amount += Number(target.target_value) || 0
+      acc[monthNum].profit += Number(target.current_value) || 0
     }
     return acc
   }, {})
@@ -86,9 +157,9 @@ const DataAnalysis = () => {
 
   // 部门完成率对比
   const departmentCompletionRate = departments.map(dept => {
-    const deptTargets = targets.filter(t => t.department === dept.name)
-    const planned = deptTargets.reduce((sum, t) => sum + (t.sales_amount || 0), 0)
-    const actual = deptTargets.reduce((sum, t) => sum + (t.profit || 0), 0)
+    const deptTargets = targets.filter(t => t.department === dept.name || t.department_name === dept.name)
+    const planned = deptTargets.reduce((sum, t) => sum + (t.target_value || 0), 0)
+    const actual = deptTargets.reduce((sum, t) => sum + (t.current_value || 0), 0)
 
     return {
       name: dept.name,
@@ -96,27 +167,60 @@ const DataAnalysis = () => {
     }
   })
 
-  // 进度完成率
+  // 进度完成率 - 优化计算逻辑
   const progressData = progress
     .map(item => {
       const target = Number(item.target_value) || 0
       const actual = Number(item.actual_value) || 0
-      const rate = target > 0 ? (actual / target) * 100 : 0
+      let rate = target > 0 ? (actual / target) * 100 : 0
+      
+      // 如果没有目标值，尝试使用 completion_rate
+      if (target === 0 && item.completion_rate) {
+        rate = parseFloat(item.completion_rate) || 0
+      }
+      
+      // 基于状态计算完成率
+      const status = String(item.status || '').toLowerCase()
+      if (status === 'completed') {
+        rate = 100
+      } else if (status === 'in_progress' || status === 'on_track') {
+        rate = 50 // 进行中的任务默认50%完成率
+      } else if (status === 'ahead') {
+        rate = 75 // 超前的任务默认75%完成率
+      }
+
       return {
-        name: item.task_name || `${item.month || ''}月` || '目标',
+        name: item.task_name || `${item.month || ''}月任务` || '目标',
         完成率: rate
       }
     })
     .sort((a, b) => {
-      const am = Number(String(a.name).replace('月', '')) || 0
-      const bm = Number(String(b.name).replace('月', '')) || 0
+      // 按月份排序
+      const am = Number(a.month) || 0
+      const bm = Number(b.month) || 0
       return am - bm
     })
     .slice(0, 10)
 
   // 大事件分布
+  // 事件类型中英文映射
+  const eventTypeMap = {
+    'market': '市场活动',
+    'product': '产品发布',
+    'operation': '运营活动',
+    'finance': '财务事件',
+    'human_resource': '人力资源',
+    'technology': '技术升级',
+    'opportunity': '机遇事件',
+    'strategic': '战略事件',
+    'risk': '风险事件',
+    'operational': '运营事件',
+    'other': '其他事件'
+  }
+
   const eventsDistribution = events.reduce((acc, event) => {
-    const dimension = event.dimension || '其他'
+    const eventType = event.event_type || 'other'
+    const dimension = eventTypeMap[eventType] || eventTypeMap['other']
     acc[dimension] = (acc[dimension] || 0) + 1
     return acc
   }, {})
@@ -127,20 +231,122 @@ const DataAnalysis = () => {
   }))
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
-  const totalCompletion = progress.reduce((sum, item) => sum + (item.completion_progress || 0), 0)
-  const completionRate = progress.length > 0 ? (totalCompletion / progress.length) * 100 : 0
+  
+  // 计算总目标完成率 - 使用实际值/目标值的比例
+  const totalTargetValue = targets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+  const totalActualValue = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+  const completionRate = totalTargetValue > 0 ? (totalActualValue / totalTargetValue) * 100 : 0
+  
+  // 计算计划完成数 - 统计所有已完成的项目
+  const plansCompleted = targets.filter(t => {
+    const targetVal = Number(t.target_value) || 0
+    const currentVal = Number(t.current_value) || 0
+    return targetVal > 0 && currentVal >= targetVal
+  }).length
+  
+  // 计算本月销售额 - 使用所选年份的当前月份
   const currentMonth = new Date().getMonth() + 1
   const monthlyOutput = targets
-    .filter(t => (t.month || 0) === currentMonth)
-    .reduce((sum, t) => sum + (t.sales_amount || 0), 0)
-  const yearlyOutput = targets.reduce((sum, t) => sum + (t.sales_amount || 0), 0)
+    .filter(t => {
+      const month = Number(t.month) || 0
+      return month === currentMonth
+    })
+    .reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+  const yearlyOutput = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
   const formatWan = (num) => {
     const n = Number(num || 0)
-    if (n >= 10000) return `${(n / 10000).toFixed(2)}万`
-    return n.toLocaleString()
+    if (n >= 10000) {
+      const s = formatNumber(n / 10000, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      const lang = getLocalePrefs().language || 'zh-CN'
+      return `${s}${lang.startsWith('zh') ? '万' : ''}`
+    }
+    return formatNumber(n)
   }
   const healthIndex = Math.max(0, Math.min(200, Math.round((completionRate / 2) + 100 - (events.length * 1))))
-  const plansCompleted = Array.isArray(plans) ? plans.filter(p => String(p.status).toLowerCase() === 'completed').length : 0
+  
+  // 表格数据准备
+  const yearlyTargetVal = targets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+  const yearlyActualVal = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+  
+  const currentMonthTargetVal = targets
+    .filter(t => Number(t.month) === currentMonth)
+    .reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+  const currentMonthActualVal = targets
+    .filter(t => Number(t.month) === currentMonth)
+    .reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+
+  const analysisTableData = [
+    {
+      name: '年度总销售额',
+      target: yearlyTargetVal,
+      actual: yearlyActualVal,
+    },
+    {
+      name: `${currentMonth}月销售额`,
+      target: currentMonthTargetVal,
+      actual: currentMonthActualVal,
+    },
+    ...departments.map(dept => {
+      const deptTargets = targets.filter(t => t.department === dept.name || t.department_name === dept.name)
+      const t = deptTargets.reduce((sum, i) => sum + (Number(i.target_value) || 0), 0)
+      const a = deptTargets.reduce((sum, i) => sum + (Number(i.current_value) || 0), 0)
+      return {
+        name: `${dept.name}`,
+        target: t,
+        actual: a,
+      }
+    })
+  ]
+
+  // 分页逻辑
+  const startIndex = (pagination.page - 1) * pagination.pageSize
+  const endIndex = startIndex + pagination.pageSize
+  const currentTableData = analysisTableData.slice(startIndex, endIndex)
+
+  const getTrendStatus = (row, rate) => {
+    // 1. 完成率 >= 100% 直接返回超额
+    if (rate >= 100) {
+      return { text: '超额', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' }
+    }
+
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const day = now.getDate()
+    const daysInMonth = new Date(now.getFullYear(), month, 0).getDate()
+    
+    let expectedProgress = 0
+    let isStartOfPeriod = false
+    
+    // 判断是否为当月数据行
+    if (row.name.includes(`${month}月`)) {
+      expectedProgress = (day / daysInMonth) * 100
+      // 月初前5天，进度要求放宽
+      if (day <= 5) isStartOfPeriod = true
+    } else {
+      // 年度或部门数据（按年度进度）
+      const yearProgress = (now.getMonth() + (day / daysInMonth)) / 12 * 100
+      expectedProgress = yearProgress
+      // 年初（1月）进度要求放宽
+      if (month === 1) isStartOfPeriod = true
+    }
+
+    // 2. 周期初期特殊处理：只要有进展或偏差不大就算正常
+    if (isStartOfPeriod) {
+      // 如果是初期，允许较大偏差（例如只完成了预期的 50% 也算正常，因为基数小）
+      if (rate >= expectedProgress * 0.5) {
+        return { text: '正常', icon: Minus, color: 'text-blue-600', bg: 'bg-blue-50' }
+      }
+    }
+
+    // 3. 常规判断逻辑
+    if (rate >= expectedProgress * 1.05) {
+      return { text: '超额', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' }
+    } else if (rate >= expectedProgress * 0.9) {
+      return { text: '正常', icon: Minus, color: 'text-blue-600', bg: 'bg-blue-50' }
+    } else {
+      return { text: '滞后', icon: TrendingDown, color: 'text-red-600', bg: 'bg-red-50' }
+    }
+  }
 
   if (loading) {
     return (
@@ -155,6 +361,9 @@ const DataAnalysis = () => {
       <PageHeaderBanner
         title="数据分析"
         subTitle="指标概览与趋势分析"
+        year={selectedYear}
+        onYearChange={setSelectedYear}
+        years={years}
         right={(
           <button
             onClick={loadData}
@@ -219,7 +428,7 @@ const DataAnalysis = () => {
               <XAxis dataKey="month" stroke="#666" fontSize={12} interval={0} tickMargin={2} />
               <YAxis stroke="#666" fontSize={12} />
               <Tooltip 
-                formatter={(value) => `¥${value.toLocaleString()}`}
+                formatter={(value) => `¥${formatNumber(value)}`}
                 contentStyle={{
                   background: 'rgba(255, 255, 255, 0.95)',
                   border: 'none',
@@ -360,39 +569,56 @@ const DataAnalysis = () => {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-gray-600">
-                <th className="text-left py-3 px-4">统计维度</th>
-                <th className="text-left py-3 px-4">数值</th>
+                <th className="text-left py-3 px-4">指标</th>
+                <th className="text-left py-3 px-4">目标值</th>
+                <th className="text-left py-3 px-4">实际值</th>
                 <th className="text-left py-3 px-4">完成率</th>
-                <th className="text-left py-3 px-4">区域</th>
+                <th className="text-left py-3 px-4">趋势</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-t border-gray-100">
-                <td className="py-3 px-4">部门数量</td>
-                <td className="py-3 px-4">{new Set(targets.map(t => t.department)).size}</td>
-                <td className="py-3 px-4">{completionRate.toFixed(1)}%</td>
-                <td className="py-3 px-4">全局</td>
-              </tr>
-              <tr className="border-t border-gray-100">
-                <td className="py-3 px-4">目标数量</td>
-                <td className="py-3 px-4">{targets.length}</td>
-                <td className="py-3 px-4">{completionRate.toFixed(1)}%</td>
-                <td className="py-3 px-4">全局</td>
-              </tr>
-              <tr className="border-t border-gray-100">
-                <td className="py-3 px-4">事件数量</td>
-                <td className="py-3 px-4">{events.length}</td>
-                <td className="py-3 px-4">{Math.max(0, (100 - events.length)).toFixed(0)}%</td>
-                <td className="py-3 px-4">全局</td>
-              </tr>
-              <tr className="border-t border-gray-100">
-                <td className="py-3 px-4">活跃用户数</td>
-                <td className="py-3 px-4">{employees.length}</td>
-                <td className="py-3 px-4">—</td>
-                <td className="py-3 px-4">全局</td>
-              </tr>
+              {currentTableData.map((row, index) => {
+                const rate = row.target > 0 ? (row.actual / row.target) * 100 : 0
+                const status = getTrendStatus(row, rate)
+                const StatusIcon = status.icon
+                
+                return (
+                  <tr key={index} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="py-3 px-4 font-medium text-gray-800">{row.name}</td>
+                    <td className="py-3 px-4 text-gray-600">¥{formatNumber(row.target)}</td>
+                    <td className="py-3 px-4 font-bold text-gray-800">¥{formatNumber(row.actual)}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center">
+                        <span className={`mr-2 font-bold ${rate >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+                          {rate.toFixed(1)}%
+                        </span>
+                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${rate >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                            style={{ width: `${Math.min(100, rate)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className={`flex items-center ${status.color} ${status.bg} px-2 py-1 rounded-full w-fit`}>
+                        <StatusIcon size={14} className="mr-1" />
+                        <span className="text-xs font-bold">{status.text}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
+          
+          <Pagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={analysisTableData.length}
+            onChange={(p) => setPagination(p)}
+            className="mt-4 border-none"
+          />
         </div>
       </div>
     </div>

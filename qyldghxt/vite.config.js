@@ -9,21 +9,28 @@ export default defineConfig(({ mode }) => {
     base: './',
     plugins: [
       react(),
-      mode === 'production' && obfuscator({
-        global: true,
-        options: {
-          compact: true,
-          controlFlowFlattening: false,
-          deadCodeInjection: false,
-          stringArray: false,
-          debugProtection: false,
-          disableConsoleOutput: false
-        }
-      })
-    ],
+      mode === 'production'
+        ? obfuscator({
+            global: true,
+            options: {
+              compact: true,
+              controlFlowFlattening: true,
+              controlFlowFlatteningThreshold: 0.4,
+              deadCodeInjection: true,
+              deadCodeInjectionThreshold: 0.1,
+              stringArray: true,
+              rotateStringArray: true,
+              shuffleStringArray: true,
+              stringArrayThreshold: 0.5,
+              debugProtection: false,
+              disableConsoleOutput: false
+            }
+          })
+        : null
+    ].filter(Boolean),
     server: {
       port: clientPort,
-      // 固定端口；若被占用则直接报错，不自动切换
+      // 固定端口；若被占用则报错
       strictPort: true,
       hmr: { overlay: false },
       proxy: {
