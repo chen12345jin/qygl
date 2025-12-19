@@ -271,7 +271,7 @@ const AnnualPlanningChart = () => {
 
   // 部门目标完成度计算
   const calculateTargetCompletion = (targets) => {
-    if (!targets || targets.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!targets || !Array.isArray(targets) || targets.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = targets.length
     let completed = 0
@@ -293,7 +293,7 @@ const AnnualPlanningChart = () => {
 
   // 月度推进计划完成度计算
   const calculateMonthlyCompletion = (monthlyProgress) => {
-    if (!monthlyProgress || monthlyProgress.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!monthlyProgress || !Array.isArray(monthlyProgress) || monthlyProgress.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = monthlyProgress.length
     let completed = 0
@@ -324,7 +324,7 @@ const AnnualPlanningChart = () => {
 
   // 大事件完成度计算
   const calculateEventsCompletion = (majorEvents) => {
-    if (!majorEvents || majorEvents.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!majorEvents || !Array.isArray(majorEvents) || majorEvents.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = majorEvents.length
     let completed = 0
@@ -346,7 +346,7 @@ const AnnualPlanningChart = () => {
 
   // 5W2H行动计划完成度计算
   const calculateActionsCompletion = (actionPlans) => {
-    if (!actionPlans || actionPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!actionPlans || !Array.isArray(actionPlans) || actionPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = actionPlans.length
     let completed = 0
@@ -370,7 +370,7 @@ const AnnualPlanningChart = () => {
 
   // 年度规划表完成度计算
   const calculatePlansCompletion = (annualPlans) => {
-    if (!annualPlans || annualPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!annualPlans || !Array.isArray(annualPlans) || annualPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = annualPlans.length
     let completed = 0
@@ -397,7 +397,7 @@ const AnnualPlanningChart = () => {
   const transformAnnualPlansToChartData = (annualPlans, targets, monthlyProgress, majorEvents, actionPlans, deptList = []) => {
     const chartData = []
     const deptIdToName = {}
-    if (deptList && deptList.length > 0) {
+    if (Array.isArray(deptList) && deptList.length > 0) {
       for (let i = 0; i < deptList.length; i++) {
         const d = deptList[i]
         if (d && d.id) deptIdToName[d.id] = d.name || d.department_name
@@ -433,7 +433,7 @@ const AnnualPlanningChart = () => {
       }
     }
     const collectDept = (arr) => {
-      if (!arr || arr.length === 0) return
+      if (!Array.isArray(arr) || arr.length === 0) return
       for (let i = 0; i < arr.length; i++) {
         const n = getDeptName(arr[i])
         if (n && isMainDepartment(n)) deptSet.add(n)
@@ -472,55 +472,65 @@ const AnnualPlanningChart = () => {
     const idxPlans = new Map()
     const idxEvents = new Map()
     const idxActions = new Map()
-    for (let i = 0; i < targets.length; i++) {
-      const t = targets[i]
-      const m = Number(t.month)
-      const dept = getDeptName(t)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxTargets.get(k) || []
-      arr.push(t)
-      idxTargets.set(k, arr)
+    if (Array.isArray(targets)) {
+      for (let i = 0; i < targets.length; i++) {
+        const t = targets[i]
+        const m = Number(t.month)
+        const dept = getDeptName(t)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxTargets.get(k) || []
+        arr.push(t)
+        idxTargets.set(k, arr)
+      }
     }
-    for (let i = 0; i < monthlyProgress.length; i++) {
-      const p = monthlyProgress[i]
-      const m = Number(p.month)
-      const dept = getDeptName(p)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxProgress.get(k) || []
-      arr.push(p)
-      idxProgress.set(k, arr)
+    if (Array.isArray(monthlyProgress)) {
+      for (let i = 0; i < monthlyProgress.length; i++) {
+        const p = monthlyProgress[i]
+        const m = Number(p.month)
+        const dept = getDeptName(p)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxProgress.get(k) || []
+        arr.push(p)
+        idxProgress.set(k, arr)
+      }
     }
-    for (let i = 0; i < annualPlans.length; i++) {
-      const wp = annualPlans[i]
-      const m = Number(wp.month)
-      const dept = getDeptName(wp)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxPlans.get(k) || []
-      arr.push(wp)
-      idxPlans.set(k, arr)
+    if (Array.isArray(annualPlans)) {
+      for (let i = 0; i < annualPlans.length; i++) {
+        const wp = annualPlans[i]
+        const m = Number(wp.month)
+        const dept = getDeptName(wp)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxPlans.get(k) || []
+        arr.push(wp)
+        idxPlans.set(k, arr)
+      }
     }
-    for (let i = 0; i < majorEvents.length; i++) {
-      const e = majorEvents[i]
-      const m = getEventMonth(e)
-      const dept = getDeptName(e)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxEvents.get(k) || []
-      arr.push(e)
-      idxEvents.set(k, arr)
+    if (Array.isArray(majorEvents)) {
+      for (let i = 0; i < majorEvents.length; i++) {
+        const e = majorEvents[i]
+        const m = getEventMonth(e)
+        const dept = getDeptName(e)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxEvents.get(k) || []
+        arr.push(e)
+        idxEvents.set(k, arr)
+      }
     }
-    for (let i = 0; i < actionPlans.length; i++) {
-      const a = actionPlans[i]
-      const m = getActionMonth(a)
-      const dept = getDeptName(a)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxActions.get(k) || []
-      arr.push(a)
-      idxActions.set(k, arr)
+    if (Array.isArray(actionPlans)) {
+      for (let i = 0; i < actionPlans.length; i++) {
+        const a = actionPlans[i]
+        const m = getActionMonth(a)
+        const dept = getDeptName(a)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxActions.get(k) || []
+        arr.push(a)
+        idxActions.set(k, arr)
+      }
     }
     for (let i = 0; i < monthsToShow.length; i++) {
       const month = monthsToShow[i]

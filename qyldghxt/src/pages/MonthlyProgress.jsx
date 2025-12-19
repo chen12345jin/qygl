@@ -10,6 +10,7 @@ import PrintPreview from '../components/PrintPreview'
 import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
 import { useDropzone } from 'react-dropzone'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 
 const MonthlyProgress = () => {
   const { globalYear, setGlobalYear, getMonthlyProgress, addMonthlyProgress, updateMonthlyProgress, deleteMonthlyProgress, getDepartments, getSystemSettings, addSystemSetting, updateSystemSetting } = useData()
@@ -493,10 +494,21 @@ const MonthlyProgress = () => {
     { 
       key: 'department', 
       label: '负责部门', 
-      type: 'select',
-      options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
+      type: 'custom',
       required: true,
-      headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200 sticky top-0 z-10'
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200 sticky top-0 z-10',
+      customField: ({ value, onChange, formData, setFormData }) => (
+        <OrgDepartmentSelect
+          value={formData.department || ''}
+          onChange={(v) => {
+            const next = { ...formData, department: v }
+            setFormData(next)
+            if (onChange) onChange(v)
+          }}
+          placeholder="请选择负责部门"
+          leafOnly
+        />
+      )
     },
     { key: 'responsible_person', label: '负责人', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-yellow-100 to-yellow-200 border-b border-gray-200 sticky top-0 z-10' },
     { key: 'key_activities', label: '关键活动', type: 'textarea', required: true, headerClassName: 'text-gray-800 bg-gradient-to-r from-red-100 to-red-200 border-b border-gray-200 sticky top-0 z-10' },

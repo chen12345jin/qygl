@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import FormField from '../components/FormField'
 import InlineAlert from '../components/InlineAlert'
 import { computeActionPlanStatus, normalizeProgress } from '../utils/status'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 import CustomSelect from '../components/CustomSelect'
 
 const AnnualPlanning = () => {
@@ -1449,6 +1450,21 @@ const AnnualPlanning = () => {
     const errorClass = error ? 'border border-red-500 ring-1 ring-red-500 rounded' : ''
 
     if (isEditing) {
+      if (type === 'select' && (field === 'department' || field === 'responsible_department')) {
+        return (
+          <div className={`w-full ${errorClass}`}>
+            <OrgDepartmentSelect
+              value={value || ''}
+              onChange={(v) => {
+                handleCellEdit(sheet, index, field, v)
+                setEditingCell({ row: null, col: null, sheet: null })
+              }}
+              placeholder="请选择部门"
+              leafOnly
+            />
+          </div>
+        )
+      }
       if (type === 'textarea') {
         return (
           <textarea

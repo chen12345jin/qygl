@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx'
 import { exportToExcel } from '../utils/export'
 import PrintPreview from '../components/PrintPreview'
 import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
 import toast from 'react-hot-toast'
 import CustomSelect from '../components/CustomSelect'
@@ -579,10 +580,21 @@ const AnnualWorkPlan = () => {
       { 
         key: 'department', 
         label: head('负责部门'), 
-        type: 'select',
-        options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
+        type: 'custom',
         required: true,
-        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' 
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200',
+        customField: ({ value, onChange, formData, setFormData }) => (
+          <OrgDepartmentSelect
+            value={formData.department || ''}
+            onChange={(v) => {
+              const next = { ...formData, department: v }
+              setFormData(next)
+              if (onChange) onChange(v)
+            }}
+            placeholder="请选择负责部门"
+            leafOnly
+          />
+        )
       },
       { 
         key: 'category', 

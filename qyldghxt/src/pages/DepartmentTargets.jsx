@@ -16,6 +16,7 @@ import { loadLocalePrefs, formatDateTime } from '../utils/locale.js'
 import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
 import InlineAlert from '../components/InlineAlert'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 
 
 const DepartmentTargets = () => {
@@ -266,7 +267,8 @@ const DepartmentTargets = () => {
         target_level: filters.target_level || undefined
       }
       const res = await getDepartmentTargets(query)
-      let data = res?.data || []
+      // 确保data是数组，处理API返回的不同数据结构
+      let data = Array.isArray(res?.data) ? res.data : (res?.data?.data || [])
       if (filters.month) {
         const m = String(filters.month)
         data = data.filter(item => String(item.month || '') === m)
@@ -640,45 +642,15 @@ const DepartmentTargets = () => {
               <th className="px-4 py-2 border-b">
                 <input type="checkbox" className="rounded" />
               </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('department')}>
-                部门 {getSortIcon('department')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('target_level')}>
-                级别 {getSortIcon('target_level')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('target_type')}>
-                类型 {getSortIcon('target_type')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('target_name')}>
-                目标名称 {getSortIcon('target_name')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('target_value')}>
-                目标值 {getSortIcon('target_value')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('unit')}>
-                单位 {getSortIcon('unit')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('quarter')}>
-                季度 {getSortIcon('quarter')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('month')}>
-                月份 {getSortIcon('month')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('current_value')}>
-                当前值 {getSortIcon('current_value')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('completion_rate')}>
-                进度（%） {getSortIcon('completion_rate')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('status')}>
-                状态 {getSortIcon('status')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('responsible_person')}>
-                负责人 {getSortIcon('responsible_person')}
-              </th>
-              <th className="px-4 py-2 border-b text-left cursor-pointer" onClick={() => handleSort('description')}>
-                描述 {getSortIcon('description')}
-              </th>
+              {columns.filter(col => !hiddenColumns.includes(col.key) && col.key !== 'actions').map(col => (
+                <th 
+                  key={col.key} 
+                  className="px-4 py-2 border-b text-left cursor-pointer"
+                  onClick={() => handleSort(col.key)}
+                >
+                  {col.label} {getSortIcon(col.key)}
+                </th>
+              ))}
               <th className="px-4 py-2 border-b text-left">
                 操作
               </th>
@@ -690,37 +662,55 @@ const DepartmentTargets = () => {
                 <td className="px-4 py-2 border-b">
                   <input type="checkbox" className="rounded" />
                 </td>
-                <td className="px-4 py-2 border-b">{target.department}</td>
-                <td className="px-4 py-2 border-b">{target.target_level}</td>
-                <td className="px-4 py-2 border-b">
-                  {{
-                    sales: '销售',
-                    profit: '利润',
-                    project: '项目',
-                    efficiency: '效率',
-                    quality: '质量',
-                    cost: '成本'
-                  }[target.target_type] || target.target_type}
-                </td>
-                <td className="px-4 py-2 border-b">{target.target_name}</td>
-                <td className="px-4 py-2 border-b">{target.target_value}</td>
-                <td className="px-4 py-2 border-b">{target.unit}</td>
-                <td className="px-4 py-2 border-b">{target.quarter}</td>
-                <td className="px-4 py-2 border-b">{target.month}</td>
-                <td className="px-4 py-2 border-b">{target.current_value}</td>
-                <td className="px-4 py-2 border-b">{target.completion_rate}</td>
-                <td className="px-4 py-2 border-b">
-                  <span className={`px-2 py-1 rounded text-xs ${target.status === 'completed' ? 'bg-green-100 text-green-800' : target.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : target.status === 'delayed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {{
-                      completed: '已完成',
-                      in_progress: '进行中',
-                      not_started: '未开始',
-                      delayed: '延期'
-                    }[target.status] || target.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2 border-b">{target.responsible_person}</td>
-                <td className="px-4 py-2 border-b">{target.description}</td>
+                {columns.filter(col => !hiddenColumns.includes(col.key) && col.key !== 'actions').map(col => {
+                  let cellValue = target[col.key]
+                  
+                  // 处理特殊列的显示
+                  if (col.key === 'target_type') {
+                    const typeMap = {
+                      sales: '销售',
+                      profit: '利润',
+                      project: '项目',
+                      efficiency: '效率',
+                      quality: '质量',
+                      cost: '成本'
+                    }
+                    cellValue = typeMap[cellValue] || cellValue
+                  } else if (col.key === 'completion_rate') {
+                    return (
+                      <td key={col.key} className="px-4 py-2 border-b">
+                        <div className="flex items-center">
+                          <div className="w-20 bg-gray-200 rounded-full h-2.5 mr-2">
+                            <div 
+                              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                              style={{ width: `${cellValue || 0}%` }}
+                            ></div>
+                          </div>
+                          <span>{cellValue || 0}%</span>
+                        </div>
+                      </td>
+                    );
+                  } else if (col.key === 'status') {
+                    return (
+                      <td key={col.key} className="px-4 py-2 border-b">
+                        <span className={`px-2 py-1 rounded text-xs ${target.status === 'completed' ? 'bg-green-100 text-green-800' : target.status === 'in_progress' ? 'bg-blue-100 text-blue-800' : target.status === 'delayed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                          {{
+                            completed: '已完成',
+                            in_progress: '进行中',
+                            not_started: '未开始',
+                            delayed: '延期'
+                          }[target.status] || target.status}
+                        </span>
+                      </td>
+                    );
+                  }
+                  
+                  return (
+                    <td key={col.key} className="px-4 py-2 border-b">
+                      {cellValue}
+                    </td>
+                  );
+                })}
                 <td className="px-4 py-2 border-b flex space-x-2">
                   <button 
                     className="text-blue-600 hover:text-blue-800" 
@@ -782,21 +772,15 @@ const DepartmentTargets = () => {
                     部门
                     <span className="ml-1 text-red-500">*</span>
                   </label>
-                  <select
-                    className={`form-select ${errors.department ? 'border-red-500' : ''}`}
+                  <OrgDepartmentSelect
                     value={newTarget.department}
-                    onChange={(e) => {
-                      const v = e.target.value
+                    onChange={(v) => {
                       setNewTarget(prev => ({ ...prev, department: v }))
                       validateField('department', v)
                     }}
-                    onBlur={(e) => validateField('department', e.target.value)}
-                  >
-                    <option value="">请选择部门</option>
-                    {getLeafDepartments(departments).map(dept => (
-                      <option key={dept.id} value={dept.name}>{dept.name}</option>
-                    ))}
-                  </select>
+                    placeholder="请选择部门"
+                    leafOnly
+                  />
                   {errors.department && <span className="text-red-500 text-sm mt-1 block">{errors.department}</span>}
                 </div>
                 <div>

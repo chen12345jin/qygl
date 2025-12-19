@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'react-hot-toast'
 import { Filter, RefreshCcw, RefreshCw } from 'lucide-react'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../../utils/orgSync'
+import OrgDepartmentSelect from '../../components/OrgDepartmentSelect'
 
 const EmployeeManagement = () => {
   const { getEmployees, addEmployee, updateEmployee, deleteEmployee, getDepartments, getDingTalkEmployees, syncEmployeesFromDingTalk, getIntegrationStatus, getSystemSettings } = useData()
@@ -165,9 +166,20 @@ const EmployeeManagement = () => {
     { 
       key: 'department', 
       label: '部门', 
-      type: 'select',
-      options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
-      required: true
+      type: 'custom',
+      required: true,
+      customField: ({ value, onChange, formData, setFormData }) => (
+        <OrgDepartmentSelect
+          value={formData.department || ''}
+          onChange={(v) => {
+            const next = { ...formData, department: v }
+            setFormData(next)
+            if (onChange) onChange(v)
+          }}
+          placeholder="请选择部门"
+          leafOnly
+        />
+      )
     },
     { key: 'position', label: '职位' },
     { key: 'phone', label: '电话' },

@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import PrintPreview from '../components/PrintPreview'
 import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 import CustomSelect from '../components/CustomSelect'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
 
@@ -500,10 +501,21 @@ const MajorEvents = () => {
       { 
         key: 'responsible_department', 
         label: '负责部门', 
-        type: 'select',
-        options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
+        type: 'custom',
         required: true,
-        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200'
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200',
+        customField: ({ value, onChange, formData, setFormData }) => (
+          <OrgDepartmentSelect
+            value={formData.responsible_department || ''}
+            onChange={(v) => {
+              const next = { ...formData, responsible_department: v }
+              setFormData(next)
+              if (onChange) onChange(v)
+            }}
+            placeholder="请选择负责部门"
+            leafOnly
+          />
+        )
       },
       { key: 'responsible_person', label: '负责人', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' },
       { key: 'budget', label: '预算（万元）', type: 'number', headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200', onChange: (value, setFormData, formData) => { const budget = parseFloat(value) || 0; const actualCost = parseFloat(formData.actual_cost) || 0; let progress = 0; if (budget > 0 && !isNaN(actualCost)) { progress = (actualCost / budget) * 100; } progress = parseFloat(progress.toFixed(2)); const normalizedProgress = normalizeProgress(progress); const next = { ...formData, budget: value, progress: normalizedProgress }; const status = computeStatus(normalizedProgress, formData.planned_date); setFormData({ ...next, status }); } },

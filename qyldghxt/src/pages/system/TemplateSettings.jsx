@@ -187,7 +187,7 @@ const TemplateSettings = () => {
     try {
       const result = await getTemplates()
       if (result.success) {
-        setTemplates(result.data || [])
+        setTemplates(Array.isArray(result.data) ? result.data : [])
       } else {
         console.error('加载模板失败:', result.error)
         setTemplates([])

@@ -6,6 +6,7 @@ import PageHeaderBanner from '../../components/PageHeaderBanner'
 import TableManager from '../../components/TableManager'
 import toast from 'react-hot-toast'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../../utils/orgSync'
+import OrgDepartmentSelect from '../../components/OrgDepartmentSelect'
 
 const UserManagement = () => {
   const { getUsers, addUser, updateUser, deleteUser, getDepartments, getRoles } = useData()
@@ -230,11 +231,21 @@ const UserManagement = () => {
     { 
       key: 'department', 
       label: '部门', 
-      type: 'select',
-      options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
+      type: 'custom',
+      customField: ({ value, onChange, formData, setFormData }) => (
+        <OrgDepartmentSelect
+          value={formData.department || ''}
+          onChange={(v) => {
+            const next = { ...formData, department: v }
+            setFormData(next)
+            if (onChange) onChange(v)
+          }}
+          placeholder="请选择部门"
+          leafOnly
+        />
+      ),
       render: (value) => {
-        // If value is ID, find name
-        const dept = departments.find(d => d.id === value || d.name === value)
+        const dept = departments.find(d => d.name === value)
         return <span className="text-sm text-gray-600">{dept ? dept.name : value || '-'}</span>
       }
     },
@@ -271,64 +282,6 @@ const UserManagement = () => {
     <div className="space-y-6">
       <PageHeaderBanner title="用户管理" subTitle="管理系统用户账号" />
       <div className="unified-table-wrapper">
-        {filterOpen && (
-          <div className="card p-6 mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label htmlFor="filter-username" className="block text-sm font-medium text-gray-700 mb-1">用户名</label>
-                <input
-                  id="filter-username"
-                  type="text"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                  placeholder="输入用户名..."
-                  value={filters.username}
-                  onChange={(e) => setFilters({ ...filters, username: e.target.value })}
-                />
-              </div>
-              <div>
-                <label htmlFor="filter-role" className="block text-sm font-medium text-gray-700 mb-1">角色</label>
-                <select
-                  id="filter-role"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                  value={filters.role}
-                  onChange={(e) => setFilters({ ...filters, role: e.target.value })}
-                >
-                  <option value="">全部角色</option>
-                  {roles.map(role => (
-                    <option key={role.name} value={role.name}>{role.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="filter-department" className="block text-sm font-medium text-gray-700 mb-1">部门</label>
-                <select
-                  id="filter-department"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                  value={filters.department}
-                  onChange={(e) => setFilters({ ...filters, department: e.target.value })}
-                >
-                  <option value="">全部部门</option>
-                  {getBusinessDepartments(departments).map(dept => (
-                    <option key={dept.id} value={dept.name}>{dept.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="filter-status" className="block text-sm font-medium text-gray-700 mb-1">状态</label>
-                <select
-                  id="filter-status"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                >
-                  <option value="">全部状态</option>
-                  <option value="启用">启用</option>
-                  <option value="禁用">禁用</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
         <TableManager
           title="用户列表"
           data={filteredUsers}
@@ -374,7 +327,77 @@ const UserManagement = () => {
               </button>
             </div>
           }
-        />
+        >
+          {filterOpen && (
+            <div className="card p-6 mb-4">
+              <div className="flex items-center justify-start mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+                    <Filter size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <div className="text-base font-semibold text-gray-800">筛选条件</div>
+                    <div className="text-xs text-gray-500">选择维度以过滤列表</div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label htmlFor="filter-username" className="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                  <input
+                    id="filter-username"
+                    type="text"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    placeholder="输入用户名..."
+                    value={filters.username}
+                    onChange={(e) => setFilters({ ...filters, username: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="filter-role" className="block text-sm font-medium text-gray-700 mb-1">角色</label>
+                  <select
+                    id="filter-role"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.role}
+                    onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+                  >
+                    <option value="">全部角色</option>
+                    {roles.map(role => (
+                      <option key={role.name} value={role.name}>{role.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="filter-department" className="block text-sm font-medium text-gray-700 mb-1">部门</label>
+                  <select
+                    id="filter-department"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.department}
+                    onChange={(e) => setFilters({ ...filters, department: e.target.value })}
+                  >
+                    <option value="">全部部门</option>
+                    {getBusinessDepartments(departments).map(dept => (
+                      <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="filter-status" className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                  <select
+                    id="filter-status"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.status}
+                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  >
+                    <option value="">全部状态</option>
+                    <option value="启用">启用</option>
+                    <option value="禁用">禁用</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </TableManager>
       </div>
     </div>
   )

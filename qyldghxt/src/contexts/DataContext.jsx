@@ -38,10 +38,23 @@ export const DataProvider = ({ children }) => {
     setLoading(true)
     try {
       const result = await operation()
-      if (showToast && result !== null && result !== undefined) {
-        toast.success('操作成功')
+      
+      // 检查后端返回的实际结果是否成功
+      const isSuccess = result === null || result === undefined || result.success === true || result.code === 200 || result.status === 'ok'
+      
+      if (isSuccess) {
+        if (showToast && result !== null && result !== undefined) {
+          toast.success('操作成功')
+        }
+        return { success: true, data: result }
+      } else {
+        // 后端返回了失败结果
+        const message = result.error || result.msg || '操作失败'
+        if (showToast) {
+          toast.error(message)
+        }
+        return { success: false, error: message, data: result }
       }
-      return { success: true, data: result }
     } catch (error) {
       // 更清晰的错误信息处理
       let message = '操作失败'
@@ -94,7 +107,7 @@ export const DataProvider = ({ children }) => {
   const getDepartments = async (params = {}) => {
     return handleApiCall(async () => {
       const response = await api.get('/departments', { params })
-      return response.data
+      return response.data || []
     }, false)
   }
 
@@ -102,14 +115,14 @@ export const DataProvider = ({ children }) => {
   const getOrganizationTree = async () => {
     return handleApiCall(async () => {
       const response = await api.get('/organization/tree')
-      return response.data
+      return response.data || []
     }, false)
   }
 
   const getDingTalkDepartments = async (params = {}) => {
     return handleApiCall(async () => {
       const response = await api.get('/dingtalk/departments', { params })
-      return response.data
+      return response.data || []
     }, false)
   }
 
@@ -146,14 +159,14 @@ export const DataProvider = ({ children }) => {
   const getEmployees = async () => {
     return handleApiCall(async () => {
       const response = await api.get('/employees')
-      return response.data
+      return response.data || []
     }, false)
   }
 
   const getDingTalkEmployees = async (params = {}) => {
     return handleApiCall(async () => {
       const response = await api.get('/dingtalk/employees', { params })
-      return response.data
+      return response.data || []
     }, false)
   }
 
@@ -220,7 +233,7 @@ export const DataProvider = ({ children }) => {
   const getRoles = async (params = {}) => {
     return handleApiCall(async () => {
       const response = await api.get('/roles', { params })
-      return response.data
+      return response.data || []
     }, false)
   }
 
@@ -250,7 +263,7 @@ export const DataProvider = ({ children }) => {
   const getSystemLogs = async (params = {}) => {
     return handleApiCall(async () => {
       const response = await api.get('/logs', { params })
-      return response.data
+      return response.data || []
     }, false)
   }
 
@@ -258,7 +271,7 @@ export const DataProvider = ({ children }) => {
   const getDepartmentTargets = async (params = {}) => {
     return handleApiCall(async () => {
       const response = await api.get('/department-targets', { params })
-      return response.data
+      return response.data || []
     }, false)
   }
 
@@ -289,11 +302,11 @@ export const DataProvider = ({ children }) => {
 
   // 年度工作落地规划
   const getAnnualWorkPlans = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/annual-work-plans', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/annual-work-plans', { params })
+    return response.data || []
+  }, false)
+}
 
   const addAnnualWorkPlan = async (data) => {
     return handleApiCall(async () => {
@@ -339,11 +352,11 @@ export const DataProvider = ({ children }) => {
 
   // 大事件提炼
   const getMajorEvents = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/major-events', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/major-events', { params })
+    return response.data || []
+  }, false)
+}
 
   const addMajorEvent = async (data) => {
     return handleApiCall(async () => {
@@ -372,11 +385,11 @@ export const DataProvider = ({ children }) => {
 
   // 月度推进计划
   const getMonthlyProgress = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/monthly-progress', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/monthly-progress', { params })
+    return response.data || []
+  }, false)
+}
 
   const addMonthlyProgress = async (data) => {
     return handleApiCall(async () => {
@@ -405,11 +418,11 @@ export const DataProvider = ({ children }) => {
 
   // 5W2H行动计划
   const getActionPlans = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/action-plans', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/action-plans', { params })
+    return response.data || []
+  }, false)
+}
 
   const addActionPlan = async (data) => {
     return handleApiCall(async () => {
@@ -438,11 +451,11 @@ export const DataProvider = ({ children }) => {
 
   // 模板设置
   const getTemplates = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/templates', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/templates', { params })
+    return response.data || []
+  }, false)
+}
 
   const addTemplate = async (data) => {
     return handleApiCall(async () => {
@@ -468,11 +481,11 @@ export const DataProvider = ({ children }) => {
 
   // 目标类型
   const getTargetTypes = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/target-types', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/target-types', { params })
+    return response.data || []
+  }, false)
+}
 
   const addTargetType = async (data) => {
     return handleApiCall(async () => {
@@ -498,11 +511,11 @@ export const DataProvider = ({ children }) => {
 
   // 系统设置
   const getSystemSettings = async (params = {}) => {
-    return handleApiCall(async () => {
-      const response = await api.get('/system-settings', { params })
-      return response.data
-    }, false)
-  }
+  return handleApiCall(async () => {
+    const response = await api.get('/system-settings', { params })
+    return response.data || []
+  }, false)
+}
 
   const addSystemSetting = async (data, showToast = true) => {
     return handleApiCall(async () => {
@@ -530,9 +543,9 @@ export const DataProvider = ({ children }) => {
   const getNotifications = async () => {
     return handleApiCall(async () => {
       const response = await api.get('/notifications')
-      return response.data
+      return response.data || []
     }, false)
-  }
+}
 
   const addNotification = async (data) => {
     return handleApiCall(async () => {
@@ -581,7 +594,7 @@ export const DataProvider = ({ children }) => {
       const response = await api.get('/company-info')
       return response.data
     }, false)
-  }
+}
 
   const updateCompanyInfo = async (data) => {
     return handleApiCall(async () => {
@@ -595,14 +608,14 @@ export const DataProvider = ({ children }) => {
       const response = await api.get('/integration/status')
       return response.data
     }, false)
-  }
+}
 
   const checkBackendHealth = async () => {
     return handleApiCall(async () => {
       const response = await api.get('/health')
       return response.data
     }, false)
-  }
+}
 
   const value = {
     loading,

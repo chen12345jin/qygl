@@ -51,6 +51,9 @@ const DataAnalysis = () => {
     overall: { rate: 0, completed: 0, total: 0 }
   })
 
+  // 确保targets始终是数组
+  const safeTargets = Array.isArray(targets) ? targets : []
+
   useEffect(() => {
     loadData()
   }, [globalYear]) // 监听年份变化
@@ -112,21 +115,21 @@ const DataAnalysis = () => {
   }
 
   // 计算各模块完成度统计
-  const calculateCompletionStats = (annualPlans, targets, monthlyProgress, majorEvents, actionPlans) => {
+  const calculateCompletionStats = (annualPlans, targetsParam, monthlyProgress, majorEvents, actionPlans) => {
     // 总目标完成率 - 使用实际值/目标值的比例
-    const totalTargetValue = targets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
-    const totalActualValue = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+    const totalTargetValue = safeTargets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+    const totalActualValue = safeTargets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
     const overallRate = totalTargetValue > 0 ? Math.round((totalActualValue / totalTargetValue) * 100) : 0
     
     // 计算计划完成数 - 统计所有已完成的项目
-    const totalCompleted = targets.filter(t => {
+    const totalCompleted = safeTargets.filter(t => {
       const targetVal = Number(t.target_value) || 0
       const currentVal = Number(t.current_value) || 0
       return targetVal > 0 && currentVal >= targetVal
     }).length
     
     // 计算总项目数
-    const totalItems = targets.length
+    const totalItems = safeTargets.length
 
     setCompletionStats({
       overall: {
@@ -138,7 +141,7 @@ const DataAnalysis = () => {
   }
 
   // 按月份的销售数据（补齐 1-12 月）
-  const monthlyByNum = targets.reduce((acc, target) => {
+  const monthlyByNum = (Array.isArray(targets) ? targets : []).reduce((acc, target) => {
     const monthNum = Number(target.month) || 0
     if (monthNum >= 1 && monthNum <= 12) {
       if (!acc[monthNum]) {
@@ -155,9 +158,11 @@ const DataAnalysis = () => {
     return monthlyByNum[m] ? monthlyByNum[m] : { month: `${m}月`, amount: 0, profit: 0 }
   })
 
+  
+
   // 部门完成率对比
   const departmentCompletionRate = departments.map(dept => {
-    const deptTargets = targets.filter(t => t.department === dept.name || t.department_name === dept.name)
+    const deptTargets = safeTargets.filter(t => t.department === dept.name || t.department_name === dept.name)
     const planned = deptTargets.reduce((sum, t) => sum + (t.target_value || 0), 0)
     const actual = deptTargets.reduce((sum, t) => sum + (t.current_value || 0), 0)
 
@@ -233,12 +238,12 @@ const DataAnalysis = () => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d']
   
   // 计算总目标完成率 - 使用实际值/目标值的比例
-  const totalTargetValue = targets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
-  const totalActualValue = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+  const totalTargetValue = safeTargets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+  const totalActualValue = safeTargets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
   const completionRate = totalTargetValue > 0 ? (totalActualValue / totalTargetValue) * 100 : 0
   
   // 计算计划完成数 - 统计所有已完成的项目
-  const plansCompleted = targets.filter(t => {
+  const plansCompleted = safeTargets.filter(t => {
     const targetVal = Number(t.target_value) || 0
     const currentVal = Number(t.current_value) || 0
     return targetVal > 0 && currentVal >= targetVal
@@ -246,13 +251,13 @@ const DataAnalysis = () => {
   
   // 计算本月销售额 - 使用所选年份的当前月份
   const currentMonth = new Date().getMonth() + 1
-  const monthlyOutput = targets
+  const monthlyOutput = safeTargets
     .filter(t => {
       const month = Number(t.month) || 0
       return month === currentMonth
     })
     .reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
-  const yearlyOutput = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+  const yearlyOutput = safeTargets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
   const formatWan = (num) => {
     const n = Number(num || 0)
     if (n >= 10000) {
@@ -265,13 +270,13 @@ const DataAnalysis = () => {
   const healthIndex = Math.max(0, Math.min(200, Math.round((completionRate / 2) + 100 - (events.length * 1))))
   
   // 表格数据准备
-  const yearlyTargetVal = targets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
-  const yearlyActualVal = targets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
+  const yearlyTargetVal = safeTargets.reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
+  const yearlyActualVal = safeTargets.reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
   
-  const currentMonthTargetVal = targets
+  const currentMonthTargetVal = safeTargets
     .filter(t => Number(t.month) === currentMonth)
     .reduce((sum, t) => sum + (Number(t.target_value) || 0), 0)
-  const currentMonthActualVal = targets
+  const currentMonthActualVal = safeTargets
     .filter(t => Number(t.month) === currentMonth)
     .reduce((sum, t) => sum + (Number(t.current_value) || 0), 0)
 
@@ -287,7 +292,7 @@ const DataAnalysis = () => {
       actual: currentMonthActualVal,
     },
     ...departments.map(dept => {
-      const deptTargets = targets.filter(t => t.department === dept.name || t.department_name === dept.name)
+      const deptTargets = safeTargets.filter(t => t.department === dept.name || t.department_name === dept.name)
       const t = deptTargets.reduce((sum, i) => sum + (Number(i.target_value) || 0), 0)
       const a = deptTargets.reduce((sum, i) => sum + (Number(i.current_value) || 0), 0)
       return {

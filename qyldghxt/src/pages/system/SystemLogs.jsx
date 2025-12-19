@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { formatDateTime } from '../../utils/locale.js'
-import { FileText, Download, Trash2, X, Filter, RefreshCcw } from 'lucide-react'
+import { FileText, Download, Trash2, X, Filter, RefreshCcw, Columns } from 'lucide-react'
 import { useData } from '../../contexts/DataContext'
 import PageHeaderBanner from '../../components/PageHeaderBanner'
 import TableManager from '../../components/TableManager'
@@ -20,6 +20,11 @@ const SystemLogs = () => {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [currentLog, setCurrentLog] = useState(null)
   const [filterOpen, setFilterOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [hiddenColumns, setHiddenColumns] = useState([])
+  const [showColumnSelector, setShowColumnSelector] = useState(false)
+  const dropdownRef = useRef(null)
+  const columnSelectorRef = useRef(null)
   const [filters, setFilters] = useState({
     username: '',
     action_type: '',
@@ -39,6 +44,7 @@ const SystemLogs = () => {
   }
   const filterCount = getFilterCount()
 
+  // 重置筛选条件
   const resetFilters = () => {
     setFilters({
       username: '',
@@ -49,6 +55,24 @@ const SystemLogs = () => {
     })
     toast.success('已重置筛选')
   }
+
+  // 检查是否有筛选条件被设置
+  const hasActiveFilters = Object.keys(filters).some(key => {
+    return filters[key] !== '' && filters[key] !== null
+  })
+
+  // Close column selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target)) {
+        setShowColumnSelector(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   useEffect(() => {
     setPage(1)
@@ -177,6 +201,7 @@ const SystemLogs = () => {
     }
   }
 
+  // 定义系统日志表格列
   const columns = useMemo(() => [
     { 
       key: 'created_at', 
@@ -235,8 +260,51 @@ const SystemLogs = () => {
           </span>
         )
       )
-    }
+    },
+    { key: 'actions', label: '操作', render: () => null } // 操作列占位符
   ], [])
+
+  // 导出Excel
+  const handleExportToExcel = () => {
+    if (!logs || logs.length === 0) {
+      toast('当前没有可导出的数据', { icon: 'ℹ️' })
+      return
+    }
+
+    const toastId = toast.loading('正在导出数据...', { duration: 0 })
+
+    setTimeout(() => {
+      try {
+        // 转换数据格式，只包含可见列的数据
+        const exportData = logs.map(item => {
+          const row = {}
+          columns.forEach(col => {
+            if (!hiddenColumns.includes(col.key) && col.key !== 'actions') {
+              // 如果列有自定义渲染函数，尝试使用它
+              if (col.render) {
+                row[col.label] = col.render(item[col.key], item)
+              } else {
+                row[col.label] = item[col.key] || ''
+              }
+            }
+          })
+          return row
+        })
+
+        exportToExcel(exportData, `系统日志`, '系统日志', 'systemLogs')
+        toast.success(`已导出 ${exportData.length} 条到 Excel`, { id: toastId })
+      } catch (error) {
+        console.error('导出Excel失败:', error)
+        toast.error('导出失败，请稍后重试', { id: toastId })
+      }
+    }, 100)
+  }
+
+  // 可切换的列，排除操作列等不需要隐藏的列
+  const toggleableColumns = columns.filter(col => col.key !== 'actions')
+
+  // 可见列
+  const visibleColumns = columns.filter(col => !hiddenColumns.includes(col.key) && col.key !== 'actions');
 
   return (
     <div className="space-y-6">
@@ -246,13 +314,179 @@ const SystemLogs = () => {
         icon={FileText}
       />
 
+      <div className="space-y-6">
+        <div>
+          {/* 使用TableActions组件统一处理列设置、筛选、重置和导出功能 */}
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gray-800">系统日志管理</h1>
+              <p className="text-gray-600 mt-1">查看系统操作记录和安全审计日志</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* 列设置 */}
+              <div className="relative" ref={columnSelectorRef}>
+                <button
+                  className="btn-secondary inline-flex items-center"
+                  onClick={() => setShowColumnSelector(!showColumnSelector)}
+                  disabled={loading}
+                >
+                  <Columns className="mr-2" size={18} />
+                  列设置
+                </button>
+                {showColumnSelector && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl z-[999] border border-gray-100 p-3 max-h-80 overflow-y-auto">
+                    <div className="text-sm font-bold text-gray-700 mb-2 px-1">显示列</div>
+                    <div className="space-y-1">
+                      {toggleableColumns.map(col => (
+                        <label key={col.key} className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            checked={!hiddenColumns.includes(col.key)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setHiddenColumns(hiddenColumns.filter(k => k !== col.key))
+                              } else {
+                                setHiddenColumns([...hiddenColumns, col.key])
+                              }
+                            }}
+                          />
+                          <span className="ml-2 text-sm text-gray-700 truncate">{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* 筛选按钮 */}
+              <div className="relative">
+                <button
+                  className="btn-primary inline-flex items-center"
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  disabled={loading}
+                >
+                  <Filter className="mr-2" size={18} />
+                  筛选
+                </button>
+              </div>
+              
+              {/* 重置按钮 */}
+              <button 
+                className={`btn-secondary inline-flex items-center ${
+                  !hasActiveFilters ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                onClick={resetFilters}
+                disabled={!hasActiveFilters || loading}
+              >
+                <RefreshCcw className="mr-2" size={18} />
+                重置
+              </button>
+              
+              {/* 导出Excel */}
+              <button
+                className={`h-10 px-3 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg hover:from-green-600 hover:to-teal-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold ${
+                  logs.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                onClick={handleExportToExcel}
+                disabled={logs.length === 0 || loading}
+              >
+                <Download className="mr-2" size={18} />
+                导出Excel
+              </button>
+              
+              {/* 批量删除按钮 */}
+              <button
+                onClick={handleBatchDelete}
+                disabled={selectedLogIds.length === 0}
+                className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                  selectedLogIds.length === 0 
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                <Trash2 size={16} />
+                <span>批量删除</span>
+              </button>
+              
+              {/* 删除所有按钮 */}
+              <button
+                onClick={handleDeleteAllLogs}
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+              >
+                <Trash2 size={16} />
+                <span>删除所有</span>
+              </button>
+            </div>
+          </div>
 
+          {/* 筛选面板 */}
+          {isFilterOpen && (
+            <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 mt-2" ref={dropdownRef}>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">操作用户</label>
+                  <input
+                    type="text"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    placeholder="输入用户名..."
+                    value={filters.username}
+                    onChange={(e) => setFilters({ ...filters, username: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">操作类型</label>
+                  <select
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.action_type}
+                    onChange={(e) => setFilters({ ...filters, action_type: e.target.value })}
+                  >
+                    <option value="">全部</option>
+                    <option value="LOGIN">登录</option>
+                    <option value="VIEW">查看</option>
+                    <option value="CREATE">新增</option>
+                    <option value="UPDATE">修改</option>
+                    <option value="DELETE">删除</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">开始日期</label>
+                  <input
+                    type="date"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.startDate}
+                    onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">结束日期</label>
+                  <input
+                    type="date"
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.endDate}
+                    onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
+                  <select
+                    className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
+                    value={filters.status}
+                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  >
+                    <option value="">全部</option>
+                    <option value="success">成功</option>
+                    <option value="failed">失败</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
-      <div className="unified-table-wrapper">
         <TableManager
           title="日志列表"
           data={logs}
-          columns={columns}
+          columns={visibleColumns}
           hideDefaultAdd={true} // 隐藏新增按钮
           onDelete={handleDeleteLog}
           onView={(log) => {
@@ -271,138 +505,8 @@ const SystemLogs = () => {
           }}
           tableClassName="unified-data-table"
           tableContainerClassName="unified-table-scroll"
-          headerActionsLeft={(
-            <div className="flex items-center space-x-2 mr-2">
-              <button
-                className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold relative"
-                onClick={() => setFilterOpen(v => !v)}
-                title="筛选"
-              >
-                <Filter size={16} />
-                <span>筛选</span>
-                {filterCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center border border-white">
-                    {filterCount}
-                  </span>
-                )}
-              </button>
-              <button
-                className={`px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2 font-semibold ${
-                  !(filters.username || filters.action_type || filters.startDate || filters.endDate || filters.status) 
-                    ? 'opacity-50 cursor-not-allowed' 
-                    : ''
-                }`}
-                onClick={resetFilters}
-                disabled={!(filters.username || filters.action_type || filters.startDate || filters.endDate || filters.status)}
-                title="重置筛选"
-              >
-                <RefreshCcw size={16} />
-                <span>重置</span>
-              </button>
-              <button
-                onClick={handleExport}
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 hover:bg-gray-50 text-gray-700"
-                title="导出Excel"
-              >
-                <Download size={16} />
-                <span>导出Excel</span>
-              </button>
-               <button
-                  onClick={handleBatchDelete}
-                  disabled={selectedLogIds.length === 0}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium ${
-                    selectedLogIds.length === 0 
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                      : 'bg-red-600 text-white hover:bg-red-700'
-                  }`}
-                >
-                  <Trash2 size={16} />
-                  <span>批量删除</span>
-                </button>
-                <button
-                  onClick={handleDeleteAllLogs}
-                  className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
-                >
-                  <Trash2 size={16} />
-                  <span>删除所有</span>
-                </button>
-            </div>
-          )}
-          children={
-            filterOpen && (
-              <div className="card p-6 mb-4">
-                <div className="flex items-center justify-start mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                      <Filter size={18} className="text-white" />
-                    </div>
-                    <div>
-                      <div className="text-base font-semibold text-gray-800">筛选条件</div>
-                      <div className="text-xs text-gray-500">选择维度以过滤列表</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">操作用户</label>
-                    <input
-                      type="text"
-                      className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                      placeholder="输入用户名..."
-                      value={filters.username}
-                      onChange={(e) => setFilters({ ...filters, username: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">操作类型</label>
-                    <select
-                      className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                      value={filters.action_type}
-                      onChange={(e) => setFilters({ ...filters, action_type: e.target.value })}
-                    >
-                      <option value="">全部</option>
-                      <option value="LOGIN">登录</option>
-                      <option value="VIEW">查看</option>
-                      <option value="CREATE">新增</option>
-                      <option value="UPDATE">修改</option>
-                      <option value="DELETE">删除</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">开始日期</label>
-                    <input
-                      type="date"
-                      className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                      value={filters.startDate}
-                      onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">结束日期</label>
-                    <input
-                      type="date"
-                      className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                      value={filters.endDate}
-                      onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">状态</label>
-                    <select
-                      className="w-full h-10 px-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all duration-200 text-sm"
-                      value={filters.status}
-                      onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                    >
-                      <option value="">全部</option>
-                      <option value="success">成功</option>
-                      <option value="failed">失败</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )
-          }
         />
+      </div>
       </div>
 
       {/* 日志详情模态框 */}

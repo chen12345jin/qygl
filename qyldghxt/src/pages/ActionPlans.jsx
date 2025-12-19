@@ -35,6 +35,7 @@ import toast from 'react-hot-toast'
 import PrintPreview from '../components/PrintPreview'
 import CustomSelect from '../components/CustomSelect'
 import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 
 const validActionPlanStatuses = ['not_started', 'in_progress', 'completed', 'delayed']
 
@@ -559,10 +560,21 @@ const ActionPlans = () => {
     { 
       key: 'department', 
       label: '负责部门', 
-      type: 'select',
-      options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
+      type: 'custom',
       required: true,
-      headerClassName: 'text-gray-800 bg-gradient-to-r from-indigo-100 to-indigo-200 border-b border-gray-200 sticky top-0 z-10'
+      headerClassName: 'text-gray-800 bg-gradient-to-r from-indigo-100 to-indigo-200 border-b border-gray-200 sticky top-0 z-10',
+      customField: ({ value, onChange, formData, setFormData }) => (
+        <OrgDepartmentSelect
+          value={formData.department || ''}
+          onChange={(v) => {
+            const next = { ...formData, department: v }
+            setFormData(next)
+            if (onChange) onChange(v)
+          }}
+          placeholder="请选择负责部门"
+          leafOnly
+        />
+      )
     },
     { 
       key: 'priority', 

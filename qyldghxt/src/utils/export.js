@@ -380,8 +380,8 @@ export const exportToExcel = (data, filename, sheetName = 'Sheet1', dataType = '
         else if (key === '优先级' || key === '重要程度') width = 10
         else if (key === '状态') width = 10
         else if (key === '进度（%）') width = 12
-        else if (key === '日期') width = 14
-        else if (key.includes('描述') || key.includes('结果') || key.includes('方案')) width = 40
+        else if (key === '日期' || key.includes('日期') || key === '时间') width = 14
+        else if (key.includes('描述') || key.includes('结果') || key.includes('方案') || key === '详情') width = 40
         
         colWidths.push({ wch: width })
       })
@@ -443,7 +443,7 @@ export const exportToExcel = (data, filename, sheetName = 'Sheet1', dataType = '
         const headerName = Object.keys(exportData[0] || {})[headerCells.indexOf(`${col}1`)]
         if (headerName === '优先级' || headerName === '重要程度' || headerName === '状态') {
           ws[cellAddr].s.alignment.horizontal = 'center'
-        } else if (headerName.includes('日期') || headerName === '进度（%）') {
+        } else if (headerName.includes('日期') || headerName === '进度（%）' || headerName === '时间') {
           ws[cellAddr].s.alignment.horizontal = 'center'
         }
       }

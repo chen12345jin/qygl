@@ -1,21 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ChevronDown, ChevronRight, Building2, User, FolderTree } from 'lucide-react'
 
-const TreeSelect = ({ value, onChange, options = [], placeholder = '请选择', disabled = false, excludeIds = [] }) => {
+const TreeSelect = ({
+  value,
+  onChange,
+  options = [],
+  placeholder = '请选择',
+  disabled = false,
+  excludeIds = [],
+  leafOnly = false,
+  selectableTypes = ['COMPANY', 'DEPT']
+}) => {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
   
   // 过滤掉需要排除的节点及其子节点
   const filterExcludedNodes = (nodes) => {
-    return nodes.filter(node => !excludeIds.includes(node.id)).map(node => {
-      if (node.children && node.children.length > 0) {
-        return {
-          ...node,
-          children: filterExcludedNodes(node.children)
+    return nodes
+      .filter(node => !excludeIds.includes(node.id))
+      .map(node => {
+        if (node.children && node.children.length > 0) {
+          return {
+            ...node,
+            children: filterExcludedNodes(node.children)
+          }
         }
-      }
-      return node
-    })
+        return node
+      })
   }
   
   const filteredOptions = excludeIds.length > 0 ? filterExcludedNodes(options) : options
@@ -52,12 +63,18 @@ const TreeSelect = ({ value, onChange, options = [], placeholder = '请选择', 
     const isSelected = value === node.id
     const isExcluded = excludeIds.includes(node.id)
     
-    const nodeType = node.type || 'DEPT'
+    const rawType = node.type || 'DEPT'
+    const nodeType = String(rawType).toUpperCase()
     const isCompany = nodeType === 'COMPANY'
-    const isUser = nodeType === 'USER' // Assumption: Employees might be in the tree with type 'USER'
+    const isUser = nodeType === 'USER'
+    const hasChildren = node.children && node.children.length > 0
+    const isLeaf = !hasChildren
+    const isSelectableType = selectableTypes.includes(nodeType)
     
-    // Logic: Disable if explicitly excluded OR if it's a User node (cannot select User as parent)
-    const isDisabled = isExcluded || isUser
+    const isDisabled =
+      isExcluded ||
+      !isSelectableType ||
+      (leafOnly && !isLeaf)
 
     let Icon = FolderTree
     let iconColor = 'text-amber-500'
