@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Edit, Trash2, Copy, X, Check, AlertCircle, Settings, Save, Eye } from 'lucide-react'
+import { Plus, Edit, Trash2, Copy, X, Check, AlertCircle, Settings, Save, Eye, Columns } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import DeleteConfirmDialog from './DeleteConfirmDialog'
 import InlineAlert from './InlineAlert'
@@ -52,6 +52,8 @@ const TableManager = ({
   ,stickyHeader = false
   ,stickyHeaderBgClass
   ,pagination
+  ,hiddenColumns = []
+  ,rowSelection
 }) => {
   const [isAdding, setIsAdding] = useState(false)
   const [isViewing, setIsViewing] = useState(false)
@@ -64,6 +66,41 @@ const TableManager = ({
     itemName: '' 
   })
   const [alertTimeout, setAlertTimeout] = useState(null)
+
+  // Column visibility state
+  const [hiddenColumnKeys, setHiddenColumnKeys] = useState(hiddenColumns)
+  const [showColumnSelector, setShowColumnSelector] = useState(false)
+  const columnSelectorRef = useRef(null)
+
+  useEffect(() => {
+    if (hiddenColumns && hiddenColumns.length > 0) {
+      setHiddenColumnKeys(prev => {
+        // Merge initial hidden columns with user selected ones? 
+        // Or just override? 
+        // Ideally we want to respect user choices but also enforce default hidden ones.
+        // For simplicity, let's just use hiddenColumns as initial value. 
+        // But if hiddenColumns prop changes, we might want to update.
+        // However, if user manually toggled a column, we don't want to overwrite it unless necessary.
+        // Let's just assume hiddenColumns is static configuration for now.
+        return [...new Set([...prev, ...hiddenColumns])]
+      })
+    }
+  }, []) // Run once on mount to merge prop
+
+  const displayColumns = columns.filter(col => !hiddenColumnKeys.includes(col.key))
+
+  // Close column selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target)) {
+        setShowColumnSelector(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   // 清理定时器
   useEffect(() => {
@@ -282,6 +319,8 @@ const TableManager = ({
         )}
         <div className="form-grid gap-6">
           {columns.map(column => {
+            if (column.hideInForm) return null
+            
             // 如果定义了 customField，使用自定义字段
             if (column.type === 'custom' && column.customField) {
               return (
@@ -369,7 +408,44 @@ const TableManager = ({
           <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{title}</h2>
         </div>
         {showActions && (
-          <div className="button-group">
+          <div className="button-group flex items-center gap-2 flex-wrap">
+            <div className="relative" ref={columnSelectorRef}>
+              <button
+                type="button"
+                onClick={() => setShowColumnSelector(!showColumnSelector)}
+                className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2 font-semibold"
+                title="列设置"
+              >
+                <Columns size={16} />
+                <span className="hidden sm:inline">列设置</span>
+              </button>
+              
+              {showColumnSelector && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl z-[999] border border-gray-100 p-3 max-h-80 overflow-y-auto">
+                  <div className="text-sm font-bold text-gray-700 mb-2 px-1">显示列</div>
+                  <div className="space-y-1">
+                    {columns.map(col => (
+                      <label key={col.key} className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          checked={!hiddenColumnKeys.includes(col.key)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setHiddenColumnKeys(hiddenColumnKeys.filter(k => k !== col.key))
+                            } else {
+                              setHiddenColumnKeys([...hiddenColumnKeys, col.key])
+                            }
+                          }}
+                        />
+                        <span className="ml-2 text-sm text-gray-700 truncate">{col.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {headerActionsLeft}
             {!hideDefaultAdd && (
               <button
@@ -433,7 +509,23 @@ const TableManager = ({
           <table className={`w-full ${tableClassName || ''}`}>
               <thead className={`${stickyHeader ? `sticky top-0 z-10 ${stickyHeaderBgClass || 'bg-white'}` : ''}`}>
                 <tr>
-                  {columns.map(column => (
+                  {rowSelection && (
+                    <th className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : medium ? 'px-4 py-2' : 'px-6 py-5'} text-left ${ultraCompact ? 'text-xs' : 'text-sm'} font-bold ${typeof actionsHeaderClassName === 'string' ? actionsHeaderClassName : 'text-white bg-gradient-to-r from-blue-600 to-purple-600 border-b border-white/30'}`}>
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                        checked={data.length > 0 && rowSelection.selectedRowKeys.length === data.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            rowSelection.onChange(data.map(item => item.id))
+                          } else {
+                            rowSelection.onChange([])
+                          }
+                        }}
+                      />
+                    </th>
+                  )}
+                  {displayColumns.map(column => (
                     <th
                       key={column.key}
                       className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : medium ? 'px-4 py-2' : 'px-6 py-5'} text-left ${ultraCompact ? 'text-xs' : 'text-sm'} font-bold ${column.headerClassName || 'text-white bg-gradient-to-r from-blue-600 to-purple-600 border-b border-white/30'}`}
@@ -464,7 +556,26 @@ const TableManager = ({
                   const list = pg ? data.slice(start, end) : data
                   return list.map((item, index) => (
                   <tr key={item.id || index} className={`group transition-all duration-300 border-b border-gray-100/50 hover:bg-gradient-to-r hover:from-blue-50/80 hover:to-purple-50/80 ${ultraCompact ? 'text-[11px] leading-none' : compact ? 'text-[12px] leading-tight' : ''}`}>
-                    {columns.map(column => {
+                    {rowSelection && (
+                      <td className={`${ultraCompact ? 'px-1 py-0' : compact ? 'px-2 py-0.5' : medium ? 'px-4 py-2' : 'px-6 py-4'} text-sm text-gray-800 border-r border-gray-100/50 last:border-r-0`}>
+                        <div className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                            checked={rowSelection.selectedRowKeys.includes(item.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                rowSelection.onChange([...rowSelection.selectedRowKeys, item.id])
+                              } else {
+                                rowSelection.onChange(rowSelection.selectedRowKeys.filter(key => key !== item.id))
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </td>
+                    )}
+                    {displayColumns.map(column => {
                       const rowClass = rowColorBy ? (rowColorMap[item[rowColorBy]] || '') : ''
                       const useEllipsis = ellipsisAll || (Array.isArray(ellipsisKeys) && ellipsisKeys.includes(column.key))
                       const cellClass = singleLineNoEllipsis

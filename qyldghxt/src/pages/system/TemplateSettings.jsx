@@ -34,9 +34,8 @@ const TemplateSettings = () => {
     }
   }, [formData.type])
 
-  // 定义字段映射 - 与各页面的必填字段保持一致
+  // 定义字段映射
   const fieldMap = {
-    // 部门目标分解 - 必填：部门、级别、目标类型、目标名称、目标值、单位、季度、月份、负责人
     department_target: [
       { key: 'department', label: '部门', type: 'select', required: true, options: [] },
       { key: 'level', label: '级别', type: 'select', required: true, options: [
@@ -87,7 +86,6 @@ const TemplateSettings = () => {
       { key: 'responsible_person', label: '负责人', type: 'text', required: true },
       { key: 'description', label: '描述', type: 'textarea', required: false }
     ],
-    // 年度工作规划 - 必填：月份/主题、计划名称、负责部门、类别、重要性、开始日期、结束日期、预算、负责人、预期结果
     annual_work_plan: [
       { key: 'month_theme', label: '月份/主题', type: 'select', required: true, options: [
         { value: '1', label: '1月 - 规划导航月' },
@@ -114,29 +112,8 @@ const TemplateSettings = () => {
         { value: 'management', label: '管理性事件' },
         { value: 'temporary', label: '临时性事件' }
       ]},
-      { key: 'priority', label: '重要性', type: 'select', required: true, options: [
-        { value: 'high', label: '非常重要' },
-        { value: 'medium', label: '重要' },
-        { value: 'normal', label: '一般' },
-        { value: 'low', label: '较低' }
-      ]},
-      { key: 'start_date', label: '开始日期', type: 'date', required: true },
-      { key: 'end_date', label: '结束日期', type: 'date', required: true },
-      { key: 'budget', label: '预算（万元）', type: 'number', required: true },
-      { key: 'responsible_person', label: '负责人', type: 'text', required: true },
-      { key: 'expected_result', label: '预期结果', type: 'number', required: true },
-      { key: 'actual_result', label: '实际结果', type: 'number', required: false },
-      { key: 'actual_cost', label: '实际成本（万元）', type: 'number', required: false },
-      { key: 'progress', label: '进度', type: 'number', required: false },
-      { key: 'status', label: '状态', type: 'select', required: false, options: [
-        { value: 'not_started', label: '未开始' },
-        { value: 'in_progress', label: '进行中' },
-        { value: 'completed', label: '已完成' },
-        { value: 'delayed', label: '已延迟' }
-      ]},
       { key: 'description', label: '计划描述', type: 'textarea', required: false }
     ],
-    // 大事件提炼 - 必填：年份、事件名称、事件类型、负责部门
     major_event: [
       { key: 'year', label: '年份', type: 'select', required: true, options: [] },
       { key: 'event_name', label: '事件名称', type: 'text', required: true },
@@ -146,26 +123,10 @@ const TemplateSettings = () => {
         { value: 'risk', label: '风险性事件' },
         { value: 'opportunity', label: '机会性事件' }
       ]},
-      { key: 'importance', label: '重要性', type: 'select', required: false, options: [
-        { value: '高', label: '高' },
-        { value: '中', label: '中' },
-        { value: '低', label: '低' }
-      ]},
       { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
-      { key: 'responsible_person', label: '负责人', type: 'text', required: false },
-      { key: 'planned_date', label: '计划日期', type: 'date', required: false },
-      { key: 'actual_date', label: '实际日期', type: 'date', required: false },
-      { key: 'budget', label: '预算（万元）', type: 'number', required: false },
-      { key: 'actual_cost', label: '实际成本（万元）', type: 'number', required: false },
-      { key: 'progress', label: '进度（%）', type: 'number', required: false },
-      { key: 'status', label: '状态', type: 'select', required: false, options: [
-        { value: 'planning', label: '规划中' },
-        { value: 'executing', label: '执行中' },
-        { value: 'completed', label: '已完成' }
-      ]},
+      { key: 'event_date', label: '事件日期', type: 'date', required: false },
       { key: 'description', label: '事件描述', type: 'textarea', required: false }
     ],
-    // 月度推进计划 - 必填：年度、月份、任务名称、负责部门、负责人、关键活动、主要成果、遇到的挑战、下月计划、需要支持
     monthly_progress: [
       { key: 'year', label: '年度', type: 'select', required: true, options: [] },
       { key: 'month', label: '月份', type: 'select', required: true, options: [
@@ -186,49 +147,27 @@ const TemplateSettings = () => {
       { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
       { key: 'responsible_person', label: '负责人', type: 'text', required: true },
       { key: 'key_activities', label: '关键活动', type: 'textarea', required: true },
-      { key: 'start_date', label: '开始日期', type: 'date', required: false },
-      { key: 'end_date', label: '结束日期', type: 'date', required: false },
-      { key: 'target_value', label: '目标值', type: 'number', required: false },
-      { key: 'actual_value', label: '实际值', type: 'number', required: false },
-      { key: 'completion_rate', label: '完成率（%）', type: 'number', required: false },
-      { key: 'achievements', label: '主要成果', type: 'textarea', required: true },
-      { key: 'challenges', label: '遇到的挑战', type: 'textarea', required: true },
-      { key: 'next_month_plan', label: '下月计划', type: 'textarea', required: true },
-      { key: 'support_needed', label: '需要支持', type: 'textarea', required: true },
-      { key: 'status', label: '状态', type: 'select', required: false, options: [
-        { value: 'not_started', label: '未开始' },
-        { value: 'in_progress', label: '进行中' },
-        { value: 'completed', label: '已完成' },
-        { value: 'delayed', label: '已延迟' }
-      ]}
+      { key: 'progress', label: '进度', type: 'number', required: false },
+      { key: 'notes', label: '备注', type: 'textarea', required: false }
     ],
-    // 5W2H行动计划 - 必填：年份、目标、开始日期、结束日期、事项、执行人/协同人、策略方法、价值、投入预算、负责部门、优先级
     action_plan: [
       { key: 'year', label: '年份', type: 'select', required: true, options: [] },
       { key: 'goal', label: '目标', type: 'textarea', required: true },
       { key: 'start_date', label: '开始日期', type: 'date', required: true },
       { key: 'end_date', label: '结束日期', type: 'date', required: true },
-      { key: 'what', label: '事项', type: 'textarea', required: true },
-      { key: 'who', label: '执行人/协同人', type: 'text', required: true },
-      { key: 'how', label: '策略方法/执行步骤/行动方案', type: 'textarea', required: true },
-      { key: 'why', label: '价值', type: 'textarea', required: true },
-      { key: 'how_much', label: '投入预算/程度/数量', type: 'number', required: true },
+      { key: 'what', label: 'What (做什么)', type: 'textarea', required: true },
+      { key: 'who', label: 'Who (谁来做)', type: 'text', required: true },
+      { key: 'how', label: 'How (怎么做)', type: 'textarea', required: true },
+      { key: 'value', label: '价值', type: 'textarea', required: true },
+      { key: 'budget', label: '投入预算', type: 'number', required: true },
       { key: 'department', label: '负责部门', type: 'select', required: true, options: [] },
       { key: 'priority', label: '优先级', type: 'select', required: true, options: [
         { value: 'high', label: '高' },
         { value: 'medium', label: '中' },
         { value: 'low', label: '低' }
       ]},
-      { key: 'expected_result', label: '预期结果', type: 'textarea', required: false },
-      { key: 'actual_result', label: '实际结果', type: 'textarea', required: false },
-      { key: 'progress', label: '进度（%）', type: 'number', required: false },
-      { key: 'status', label: '状态', type: 'select', required: false, options: [
-        { value: 'not_started', label: '未开始' },
-        { value: 'in_progress', label: '进行中' },
-        { value: 'completed', label: '已完成' },
-        { value: 'delayed', label: '已延迟' }
-      ]},
-      { key: 'remarks', label: '备注', type: 'textarea', required: false }
+      { key: 'why', label: 'Why (为什么)', type: 'textarea', required: false },
+      { key: 'where', label: 'Where (在哪里)', type: 'text', required: false }
     ]
   }
 
@@ -248,7 +187,7 @@ const TemplateSettings = () => {
     try {
       const result = await getTemplates()
       if (result.success) {
-        setTemplates(result.data || [])
+        setTemplates(Array.isArray(result.data) ? result.data : [])
       } else {
         console.error('加载模板失败:', result.error)
         setTemplates([])
@@ -375,31 +314,21 @@ const TemplateSettings = () => {
       // 创建表头数组，必填字段加*标记
       const headers = fields.map(field => (field.required ? `${field.label}*` : field.label))
 
-      // 创建一个空白的数据行
+      // 创建一个空白的数据行作为示例
       const emptyRow = fields.map(() => '')
-      
-      // 创建示例行，展示下拉选择字段的可选值
-      const exampleRow = fields.map(field => {
-        if (field.type === 'select' && field.options && field.options.length > 0) {
-          // 返回第一个选项作为示例
-          return field.options[0].label || field.options[0].value
-        }
-        return ''
-      })
 
       // 第一行：提示说明
-      const tipRow = ['提示：红色带*的列为必填项，下拉选择列请参考"选项值参考"sheet']
+      const tipRow = ['提示：红色带*的列为必填项']
       // 补齐空列
       for (let i = 1; i < fields.length; i++) {
         tipRow.push('')
       }
 
-      // 创建工作表数据（增加更多空行）
-      const dataRowCount = 100
-      const wsData = [tipRow, headers, exampleRow]
+      // 创建工作表数据
+      const wsData = [tipRow, headers]
 
-      // 添加空白行方便用户填写
-      for (let i = 0; i < dataRowCount - 1; i++) {
+      // 添加几行空白行方便用户填写
+      for (let i = 0; i < 10; i++) {
         wsData.push([...emptyRow])
       }
 
@@ -465,62 +394,6 @@ const TemplateSettings = () => {
         ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: fields.length - 1 } }]
       }
 
-      // 为select类型字段添加数据验证（下拉列表）
-      const selectFields = fields.filter(f => f.type === 'select' && f.options && f.options.length > 0)
-      
-      // 初始化数据验证数组
-      if (!ws['!dataValidation']) {
-        ws['!dataValidation'] = []
-      }
-      
-      // 为每个select字段添加数据验证
-      fields.forEach((field, colIndex) => {
-        if (field.type === 'select' && field.options && field.options.length > 0) {
-          // 获取选项值列表
-          const optionValues = field.options.map(opt => opt.label || opt.value).join(',')
-          
-          // 为该列的所有数据行添加数据验证（从第3行开始，因为第1行是提示，第2行是表头）
-          const colLetter = XLSX.utils.encode_col(colIndex)
-          
-          // 添加数据验证规则（从第3行开始，包括示例行）
-          ws['!dataValidation'].push({
-            sqref: `${colLetter}3:${colLetter}${dataRowCount + 3}`,
-            type: 'list',
-            formula1: `"${optionValues}"`,
-            showDropDown: true,
-            showErrorMessage: true,
-            errorTitle: '输入错误',
-            error: `请从下拉列表中选择有效值：${optionValues}`,
-            showInputMessage: true,
-            promptTitle: field.label,
-            prompt: `请选择：${optionValues}`
-          })
-        }
-      })
-      
-      // 如果有select字段，创建选项值参考sheet
-      if (selectFields.length > 0) {
-        const optionsData = []
-        const maxOptions = Math.max(...selectFields.map(f => f.options.length))
-        
-        // 表头：字段名
-        const optHeaders = selectFields.map(f => f.label)
-        optionsData.push(optHeaders)
-        
-        // 填充选项值
-        for (let i = 0; i < maxOptions; i++) {
-          const row = selectFields.map(f => {
-            const opt = f.options[i]
-            return opt ? (opt.label || opt.value) : ''
-          })
-          optionsData.push(row)
-        }
-        
-        const optSheet = XLSX.utils.aoa_to_sheet(optionsData)
-        optSheet['!cols'] = selectFields.map(() => ({ wch: 20 }))
-        XLSX.utils.book_append_sheet(workbook, optSheet, '选项值参考')
-      }
-
       XLSX.utils.book_append_sheet(workbook, ws, '数据填写')
 
       // 添加字段说明sheet，帮助用户了解每个字段的填写要求
@@ -537,7 +410,7 @@ const TemplateSettings = () => {
                      field.type === 'date' ? '日期' : 
                      field.type === 'select' ? '下拉选择' : 
                      field.type === 'textarea' ? '多行文本' : field.type,
-          '可选值（下拉选择字段请从此列表中选择）': optionsStr,
+          '可选值': optionsStr,
           '说明': field.description || ''
         }
       })
@@ -546,7 +419,7 @@ const TemplateSettings = () => {
         { wch: 15 },
         { wch: 10 },
         { wch: 12 },
-        { wch: 50 },
+        { wch: 40 },
         { wch: 20 }
       ]
       XLSX.utils.book_append_sheet(workbook, guideSheet, '填写说明')
@@ -554,7 +427,7 @@ const TemplateSettings = () => {
       // 获取模板类型的中文名称
       const typeLabel = templateTypes.find(t => t.value === template.type)?.label || template.type
       XLSX.writeFile(workbook, `${typeLabel}_数据模板.xlsx`)
-      toast.success('数据模板导出成功，下拉选择字段的可选值请参考"选项值"和"填写说明"sheet')
+      toast.success('数据模板导出成功')
     } catch (error) {
       console.error('导出失败:', error)
       toast.error('导出失败')

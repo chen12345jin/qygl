@@ -1,4 +1,4 @@
-const http = require('http');
+import http from 'http';
 
 const testUserUpdate = () => {
   // First, get the current users to see the initial state

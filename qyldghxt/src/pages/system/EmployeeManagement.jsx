@@ -4,7 +4,9 @@ import { useData } from '../../contexts/DataContext'
 import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'react-hot-toast'
-import { Filter, RefreshCcw } from 'lucide-react'
+import { Filter, RefreshCcw, RefreshCw } from 'lucide-react'
+import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../../utils/orgSync'
+import OrgDepartmentSelect from '../../components/OrgDepartmentSelect'
 
 const EmployeeManagement = () => {
   const { getEmployees, addEmployee, updateEmployee, deleteEmployee, getDepartments, getDingTalkEmployees, syncEmployeesFromDingTalk, getIntegrationStatus, getSystemSettings } = useData()
@@ -22,6 +24,7 @@ const EmployeeManagement = () => {
     department: '',
     status: ''
   })
+  const [syncing, setSyncing] = useState(false)
 
   // 当数据变化导致当前页码超过最大页码时，自动跳转到最后一页
   useEffect(() => {
@@ -65,7 +68,6 @@ const EmployeeManagement = () => {
   }
 
   const loadDepartments = async () => {
-    // 只加载部门类型的节点，不包含公司节点
     const result = await getDepartments({ type: 'DEPT' })
     if (result.success) {
       setDepartments(result.data || [])
@@ -75,11 +77,14 @@ const EmployeeManagement = () => {
   const filteredEmployees = useMemo(() => {
     return employees.filter(e => {
       if (filters.name && !e.name.toLowerCase().includes(filters.name.toLowerCase())) return false
-      if (filters.department && e.department !== filters.department) return false
+      if (filters.department) {
+        const names = getDescendantDepartmentNames(departments, filters.department)
+        if (names.length > 0 && !names.includes(e.department)) return false
+      }
       if (filters.status && e.status !== filters.status) return false
       return true
     })
-  }, [employees, filters])
+  }, [employees, filters, departments])
 
   const getFilterCount = () => {
     let count = 0
@@ -102,6 +107,7 @@ const EmployeeManagement = () => {
 
   const syncFromDingTalk = async () => {
     try {
+      setSyncing(true)
       const result = await syncEmployeesFromDingTalk({ all: true })
       if (result.success) {
         await loadEmployees()
@@ -111,6 +117,8 @@ const EmployeeManagement = () => {
       }
     } catch (e) {
       toast.error('同步钉钉员工失败')
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -158,9 +166,20 @@ const EmployeeManagement = () => {
     { 
       key: 'department', 
       label: '部门', 
-      type: 'select',
-      options: departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name })),
-      required: true
+      type: 'custom',
+      required: true,
+      customField: ({ value, onChange, formData, setFormData }) => (
+        <OrgDepartmentSelect
+          value={formData.department || ''}
+          onChange={(v) => {
+            const next = { ...formData, department: v }
+            setFormData(next)
+            if (onChange) onChange(v)
+          }}
+          placeholder="请选择部门"
+          leafOnly
+        />
+      )
     },
     { key: 'position', label: '职位' },
     { key: 'phone', label: '电话' },
@@ -236,10 +255,11 @@ const EmployeeManagement = () => {
               </button>
               <button
                 onClick={syncFromDingTalk}
-                disabled={!dingtalkEnabled}
-                className={`px-3 py-2 ${!dingtalkEnabled ? 'bg-gray-300' : 'bg-gradient-to-r from-emerald-500 to-teal-600'} text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold`}
+                disabled={syncing || !dingtalkEnabled}
+                className={`px-3 py-2 ${(syncing || !dingtalkEnabled) ? 'bg-gray-300' : 'bg-gradient-to-r from-emerald-500 to-teal-600'} text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold`}
               >
-                <span>{dingtalkEnabled ? '同步钉钉员工' : '未配置钉钉'}</span>
+                <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+                <span>{syncing ? '同步中...' : (dingtalkEnabled ? '同步钉钉员工' : '未配置钉钉')}</span>
               </button>
             </div>
           ) : null}
@@ -278,7 +298,7 @@ const EmployeeManagement = () => {
                     onChange={(e) => setFilters({ ...filters, department: e.target.value })}
                   >
                     <option value="">全部部门</option>
-                    {departments.filter(d => !d.name.includes('公司')).map(dept => (
+                    {getBusinessDepartments(departments).map(dept => (
                       <option key={dept.id} value={dept.name}>{dept.name}</option>
                     ))}
                   </select>

@@ -27,6 +27,7 @@ const io = new Server(server, {
 
 const BACKUP_DIR = path.join(__dirname, '../backups');
 const UPDATES_DIR = path.join(__dirname, '../public/updates');
+const LOGS_DIR = path.join(__dirname, '../logs');
 const SYSTEM_SETTINGS_FILE = path.join(__dirname, '../temp_store/system_settings.json');
 const AUDIT_LOG_FILE = path.join(__dirname, '../temp_store/audit_logs.json');
 const DEPARTMENT_TARGETS_FILE = path.join(__dirname, '../temp_store/department_targets.json');
@@ -43,6 +44,66 @@ const TEMPLATES_FILE = path.join(__dirname, '../temp_store/templates.json');
 const NOTIFICATIONS_FILE = path.join(__dirname, '../temp_store/notifications.json');
 const COMPANY_INFO_FILE = path.join(__dirname, '../temp_store/company_info.json');
 const upload = multer({ storage: multer.memoryStorage() });
+
+// 确保日志目录存在
+if (!fs.existsSync(LOGS_DIR)) {
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+}
+
+// 获取当前日志文件名
+function getLogFileName() {
+  const now = new Date();
+  const pad = (n) => (n < 10 ? `0${n}` : String(n));
+  return `server-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.log`;
+}
+
+// 获取日志文件路径
+const LOG_FILE = path.join(LOGS_DIR, getLogFileName());
+
+// 重定向控制台输出到文件
+function setupConsoleRedirect() {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const originalInfo = console.info;
+
+  // 确保日志文件目录存在
+  if (!fs.existsSync(LOGS_DIR)) {
+    fs.mkdirSync(LOGS_DIR, { recursive: true });
+  }
+
+  // 写入日志到文件的函数
+  function writeToLog(message) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} ${message}\n`;
+    fs.appendFileSync(LOG_FILE, logEntry, 'utf-8');
+  }
+
+  // 重写控制台方法
+  console.log = function(...args) {
+    originalLog.apply(console, args);
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    writeToLog(`[INFO] ${message}`);
+  };
+
+  console.error = function(...args) {
+    originalError.apply(console, args);
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    writeToLog(`[ERROR] ${message}`);
+  };
+
+  console.warn = function(...args) {
+    originalWarn.apply(console, args);
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    writeToLog(`[WARN] ${message}`);
+  };
+
+  console.info = function(...args) {
+    originalInfo.apply(console, args);
+    const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+    writeToLog(`[INFO] ${message}`);
+  };
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '2h';
@@ -177,10 +238,16 @@ function getNextId(list) {
   return list.reduce((max, item) => (item.id && item.id > max ? item.id : max), 0) + 1;
 }
 
-function maskSensitive(obj) {
+function maskSensitive(obj, visited = new Set()) {
   if (!obj || typeof obj !== 'object') return obj;
+  if (visited.has(obj)) {
+    return '[Circular Reference]';
+  }
+  visited.add(obj);
   if (Array.isArray(obj)) {
-    return obj.map((item) => maskSensitive(item));
+    const result = obj.map((item) => maskSensitive(item, visited));
+    visited.delete(obj);
+    return result;
   }
   const result = {};
   Object.keys(obj).forEach((key) => {
@@ -195,11 +262,12 @@ function maskSensitive(obj) {
     ) {
       result[key] = value ? '***' : value;
     } else if (value && typeof value === 'object') {
-      result[key] = maskSensitive(value);
+      result[key] = maskSensitive(value, visited);
     } else {
       result[key] = value;
     }
   });
+  visited.delete(obj);
   return result;
 }
 
@@ -475,6 +543,28 @@ function saveDepartmentsStore(list) {
   saveJsonArrayFile(DEPARTMENTS_FILE, list);
 }
 
+function getDepartmentDescendantNamesByName(name) {
+  if (!name) return [];
+  const list = loadDepartmentsStore();
+  if (!Array.isArray(list) || list.length === 0) return [name];
+  const roots = list.filter((dept) => dept && dept.name === name);
+  if (roots.length === 0) return [name];
+  const resultNames = new Set();
+  const stack = [...roots];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || resultNames.has(node.name)) continue;
+    resultNames.add(node.name);
+    const children = list.filter((dept) => dept && dept.parent_id === node.id);
+    children.forEach((child) => {
+      if (child && !resultNames.has(child.name)) {
+        stack.push(child);
+      }
+    });
+  }
+  return Array.from(resultNames);
+}
+
 function loadEmployeesStore() {
   return loadJsonArrayFile(EMPLOYEES_FILE, mockData.employees);
 }
@@ -598,49 +688,6 @@ function shouldWriteAuditLog() {
     return !!value.auditLog;
   }
   return true;
-}
-
-// API路径到操作描述的映射表 - 必须在appendAuditLog之前定义
-const API_PATH_MAPPING = {
-  '/api/login': { action: '用户登录', description: '用户登录系统' },
-  '/api/annual-work-plans': { action: '年度工作落地规划', description: '操作年度工作落地规划' },
-  '/api/major-events': { action: '大事件', description: '操作大事件' },
-  '/api/monthly-progress': { action: '月度推进计划', description: '操作月度推进计划' },
-  '/api/action-plans': { action: '行动计划', description: '操作行动计划' },
-  '/api/departments': { action: '部门管理', description: '操作部门信息' },
-  '/api/employees': { action: '员工管理', description: '操作员工信息' },
-  '/api/users': { action: '用户管理', description: '操作用户账号' },
-  '/api/roles': { action: '角色管理', description: '操作角色权限' },
-  '/api/target-types': { action: '目标类型', description: '操作目标类型' },
-  '/api/department-targets': { action: '部门目标分解', description: '操作部门目标分解' },
-  '/api/notifications': { action: '通知管理', description: '操作系统通知' },
-  '/api/system-settings': { action: '系统设置', description: '操作系统设置' },
-  '/api/company-info': { action: '公司信息', description: '操作公司信息' },
-  '/api/templates': { action: '模板管理', description: '操作模板' },
-  '/api/admin/backups': { action: '备份管理', description: '操作系统备份' },
-  '/api/admin/backup': { action: '创建备份', description: '创建系统备份' },
-  '/api/admin/cleanup-data': { action: '数据清理', description: '清理系统数据' },
-  '/api/dingtalk/employees': { action: '钉钉员工', description: '获取钉钉员工列表' },
-  '/api/departments/sync-dingtalk': { action: '同步钉钉部门', description: '从钉钉同步部门数据' },
-  '/api/employees/sync-dingtalk': { action: '同步钉钉员工', description: '从钉钉同步员工数据' },
-  '/api/upload': { action: '文件上传', description: '上传文件' },
-  '/api/logs': { action: '系统日志', description: '操作日志记录' }
-};
-
-// 从请求体中提取关键信息 - 必须在appendAuditLog之前定义
-function extractKeyInfo(body) {
-  if (!body || typeof body !== 'object') return '';
-  
-  const keyFields = ['name', 'title', 'username', 'department', 'role', 'year', 'status'];
-  const info = [];
-  
-  for (const field of keyFields) {
-    if (body[field] && typeof body[field] === 'string' && body[field].trim() !== '') {
-      info.push(`${field}: ${body[field]}`);
-    }
-  }
-  
-  return info.length > 0 ? ` (${info.join(', ')})` : '';
 }
 
 function appendAuditLog(entry) {
@@ -895,6 +942,9 @@ function applyBackupSnapshot(snapshot) {
   }
   if (Array.isArray(snapshot.users)) {
     saveUsersStore(snapshot.users);
+  }
+  if (Array.isArray(snapshot.roles)) {
+    saveRolesStore(snapshot.roles);
   }
   if (Array.isArray(snapshot.target_types)) {
     saveTargetTypesStore(snapshot.target_types);
@@ -1695,6 +1745,49 @@ app.delete('/api/roles/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// API路径到操作描述的映射表
+const API_PATH_MAPPING = {
+  '/api/login': { action: '用户登录', description: '用户登录系统' },
+  '/api/annual-work-plans': { action: '年度工作落地规划', description: '操作年度工作落地规划' },
+  '/api/major-events': { action: '大事件', description: '操作大事件' },
+  '/api/monthly-progress': { action: '月度推进计划', description: '操作月度推进计划' },
+  '/api/action-plans': { action: '行动计划', description: '操作行动计划' },
+  '/api/departments': { action: '部门管理', description: '操作部门信息' },
+  '/api/employees': { action: '员工管理', description: '操作员工信息' },
+  '/api/users': { action: '用户管理', description: '操作用户账号' },
+  '/api/roles': { action: '角色管理', description: '操作角色权限' },
+  '/api/target-types': { action: '目标类型', description: '操作目标类型' },
+  '/api/department-targets': { action: '部门目标分解', description: '操作部门目标分解' },
+  '/api/notifications': { action: '通知管理', description: '操作系统通知' },
+  '/api/system-settings': { action: '系统设置', description: '操作系统设置' },
+  '/api/company-info': { action: '公司信息', description: '操作公司信息' },
+  '/api/templates': { action: '模板管理', description: '操作模板' },
+  '/api/admin/backups': { action: '备份管理', description: '操作系统备份' },
+  '/api/admin/backup': { action: '创建备份', description: '创建系统备份' },
+  '/api/admin/cleanup-data': { action: '数据清理', description: '清理系统数据' },
+  '/api/dingtalk/employees': { action: '钉钉员工', description: '获取钉钉员工列表' },
+  '/api/departments/sync-dingtalk': { action: '同步钉钉部门', description: '从钉钉同步部门数据' },
+  '/api/employees/sync-dingtalk': { action: '同步钉钉员工', description: '从钉钉同步员工数据' },
+  '/api/upload': { action: '文件上传', description: '上传文件' },
+  '/api/logs': { action: '系统日志', description: '操作日志记录' }
+};
+
+// 从请求体中提取关键信息
+function extractKeyInfo(body) {
+  if (!body || typeof body !== 'object') return '';
+  
+  const keyFields = ['name', 'title', 'username', 'department', 'role', 'year', 'status'];
+  const info = [];
+  
+  for (const field of keyFields) {
+    if (body[field] && typeof body[field] === 'string' && body[field].trim() !== '') {
+      info.push(`${field}: ${body[field]}`);
+    }
+  }
+  
+  return info.length > 0 ? ` (${info.join(', ')})` : '';
+}
+
 function mapAuditRecordToLogView(rec) {
   if (!rec || typeof rec !== 'object') return null;
   const createdAt = rec.created_at || rec.time || new Date().toISOString();
@@ -2073,10 +2166,13 @@ app.get('/api/department-targets', (req, res) => {
     }
 
     if (department) {
-      filtered = filtered.filter((item) => {
-        const deptName = item.department || item.department_name || '';
-        return deptName === department;
-      });
+      const names = getDepartmentDescendantNamesByName(department);
+      if (Array.isArray(names) && names.length > 0) {
+        filtered = filtered.filter((item) => {
+          const deptName = item.department || item.department_name || '';
+          return names.includes(deptName);
+        });
+      }
     }
 
     if (targetType) {
@@ -2483,6 +2579,25 @@ io.on('connection', (socket) => {
   // 向所有客户端发送在线用户数
   io.emit('user-online', onlineUsers);
   
+  // 处理加入房间事件
+  socket.on('join-room', (room) => {
+    console.log(`User joining room: ${room}`);
+    socket.join(room);
+  });
+  
+  // 处理离开房间事件
+  socket.on('leave-room', (room) => {
+    console.log(`User leaving room: ${room}`);
+    socket.leave(room);
+  });
+  
+  // 处理数据更新事件
+  socket.on('data-update', (data) => {
+    console.log(`Data update received for room: ${data.room}`);
+    // 向指定房间的所有客户端发送数据更新
+    io.to(data.room).emit('data-updated', data);
+  });
+  
   socket.on('disconnect', () => {
     console.log('User disconnected');
     // 从在线列表中移除用户
@@ -2643,6 +2758,7 @@ app.post('/api/admin/backup', async (req, res) => {
       action_plans: loadActionPlans(),
       notifications: loadNotificationsStore(),
       users: loadUsersStore(),
+      roles: loadRolesStore(),
       target_types: loadTargetTypesStore(),
       templates: loadTemplatesStore(),
       department_targets: loadDepartmentTargets(),
@@ -2698,10 +2814,11 @@ app.get('/api/admin/backups/:name', async (req, res) => {
       res.status(404).json({ error: '备份文件不存在' });
       return;
     }
-    await fsp.unlink(full);
-    res.json({ success: true });
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.sendFile(full);
   } catch (e) {
-    res.status(500).json({ error: '删除备份失败' });
+    res.status(500).json({ error: '下载备份失败' });
   }
 });
 
@@ -2742,12 +2859,17 @@ function startAutoBackup() {
     const backupInterval = systemRec?.value?.backupInterval ?? 24; // 默认24小时
     
     if (autoBackupEnabled) {
-      console.log(`自动备份已启用，每 ${backupInterval} 小时执行一次`);
+      console.log('\n=== 自动备份初始化 ===');
+      console.log(`状态: 已启用`);
+      console.log(`备份间隔: ${backupInterval} 小时`);
+      console.log(`备份目录: ${BACKUP_DIR}`);
+      console.log(`下次备份时间: ${new Date(Date.now() + backupInterval * 60 * 60 * 1000).toLocaleString('zh-CN')}`);
       const intervalMs = backupInterval * 60 * 60 * 1000;
       
       autoBackupInterval = setInterval(async () => {
         try {
-          console.log('开始执行自动备份...');
+          console.log('\n=== 自动备份执行 ===');
+          console.log(`开始时间: ${new Date().toLocaleString('zh-CN')}`);
           const now = new Date();
           const pad = (n) => (n < 10 ? `0${n}` : String(n));
           const name = `auto-backup-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.json`;
@@ -2762,6 +2884,7 @@ function startAutoBackup() {
             action_plans: loadActionPlans(),
             notifications: loadNotificationsStore(),
             users: loadUsersStore(),
+            roles: loadRolesStore(),
             target_types: loadTargetTypesStore(),
             templates: loadTemplatesStore(),
             department_targets: loadDepartmentTargets(),
@@ -2772,13 +2895,17 @@ function startAutoBackup() {
           
           const full = path.join(BACKUP_DIR, name);
           await fsp.writeFile(full, JSON.stringify(snapshot, null, 2), 'utf-8');
-          console.log(`自动备份成功：${name}`);
+          console.log(`成功: ${name}`);
+          console.log(`文件大小: ${(JSON.stringify(snapshot).length / 1024).toFixed(2)} KB`);
+          console.log(`完成时间: ${new Date().toLocaleString('zh-CN')}`);
         } catch (e) {
           console.error('自动备份失败：', e);
         }
       }, intervalMs);
     } else {
-      console.log('自动备份已禁用');
+      console.log('\n=== 自动备份初始化 ===');
+      console.log(`状态: 已禁用`);
+      console.log(`如需启用，请在系统设置中配置`);
     }
   } catch (e) {
     console.error('初始化自动备份失败：', e);
@@ -2787,8 +2914,52 @@ function startAutoBackup() {
 
 // 启动服务器后初始化自动备份
 if (!process.env.RUN_DATA_CLEANUP_ONLY) {
-  server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  // 设置控制台输出重定向到日志文件
+  setupConsoleRedirect();
+  
+  server.listen(PORT, '0.0.0.0', () => {
+    const now = new Date().toLocaleString('zh-CN');
+    const isoNow = new Date().toISOString();
+    console.log('=======================================');
+    console.log(`=== 企业年度规划系统 - 服务启动 ===`);
+    console.log(`启动时间: ${now}`);
+    console.log(`服务地址: http://localhost:${PORT}`);
+    console.log(`日志文件: ${LOG_FILE}`);
+    console.log('=======================================');
+    console.log('\n=== 配置信息 ===');
+    console.log(`JWT过期时间: ${JWT_EXPIRES_IN}`);
+    console.log(`数据存储路径: ${path.join(__dirname, '../temp_store')}`);
+    console.log(`备份存储路径: ${BACKUP_DIR}`);
+    console.log(`更新文件路径: ${UPDATES_DIR}`);
+    console.log(`日志存储路径: ${LOGS_DIR}`);
+    console.log('\n=== API服务 ===');
+    console.log('REST API已启动，支持以下主要路径:');
+    Object.keys(API_PATH_MAPPING).forEach(path => {
+      console.log(`  - ${path} (${API_PATH_MAPPING[path].action})`);
+    });
+    console.log('\n=== WebSocket服务 ===');
+    console.log('Socket.io已启动，支持实时通信');
+    console.log('\n=== 自动备份 ===');
+    console.log('将在5秒后初始化自动备份功能');
+    console.log('=======================================');
+    
+    // 记录服务启动日志到审计日志文件
+    appendAuditLog({
+      username: '系统',
+      role: '系统',
+      method: 'START',
+      path: '/server/start',
+      status: 200,
+      duration_ms: 0,
+      ip: 'localhost',
+      ua: 'System',
+      query: {},
+      body: {},
+      action_type: 'SYSTEM',
+      details: `企业年度规划系统服务启动，服务地址: http://localhost:${PORT}，启动时间: ${isoNow}，日志文件: ${LOG_FILE}`,
+      created_at: isoNow
+    });
+    
     // 延迟5秒启动自动备份，确保服务器完全启动
     setTimeout(startAutoBackup, 5000);
   });

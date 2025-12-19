@@ -271,7 +271,7 @@ const AnnualPlanningChart = () => {
 
   // 部门目标完成度计算
   const calculateTargetCompletion = (targets) => {
-    if (!targets || targets.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!targets || !Array.isArray(targets) || targets.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = targets.length
     let completed = 0
@@ -293,7 +293,7 @@ const AnnualPlanningChart = () => {
 
   // 月度推进计划完成度计算
   const calculateMonthlyCompletion = (monthlyProgress) => {
-    if (!monthlyProgress || monthlyProgress.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!monthlyProgress || !Array.isArray(monthlyProgress) || monthlyProgress.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = monthlyProgress.length
     let completed = 0
@@ -324,7 +324,7 @@ const AnnualPlanningChart = () => {
 
   // 大事件完成度计算
   const calculateEventsCompletion = (majorEvents) => {
-    if (!majorEvents || majorEvents.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!majorEvents || !Array.isArray(majorEvents) || majorEvents.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = majorEvents.length
     let completed = 0
@@ -346,7 +346,7 @@ const AnnualPlanningChart = () => {
 
   // 5W2H行动计划完成度计算
   const calculateActionsCompletion = (actionPlans) => {
-    if (!actionPlans || actionPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!actionPlans || !Array.isArray(actionPlans) || actionPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = actionPlans.length
     let completed = 0
@@ -370,7 +370,7 @@ const AnnualPlanningChart = () => {
 
   // 年度规划表完成度计算
   const calculatePlansCompletion = (annualPlans) => {
-    if (!annualPlans || annualPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
+    if (!annualPlans || !Array.isArray(annualPlans) || annualPlans.length === 0) return { total: 0, completed: 0, inProgress: 0, rate: 0 }
     
     const total = annualPlans.length
     let completed = 0
@@ -397,7 +397,7 @@ const AnnualPlanningChart = () => {
   const transformAnnualPlansToChartData = (annualPlans, targets, monthlyProgress, majorEvents, actionPlans, deptList = []) => {
     const chartData = []
     const deptIdToName = {}
-    if (deptList && deptList.length > 0) {
+    if (Array.isArray(deptList) && deptList.length > 0) {
       for (let i = 0; i < deptList.length; i++) {
         const d = deptList[i]
         if (d && d.id) deptIdToName[d.id] = d.name || d.department_name
@@ -410,34 +410,18 @@ const AnnualPlanningChart = () => {
       return null
     }
     
-    // 需要删除的部门列表 - 包含外部人员和职能部门
-    const departmentsToRemove = [
-      // 外部人员
-      '外协', '客户', '供应商', '外协部',
-      
-      // 职能部门
-      '设计部', '设计组', '计划部', '行政部', '人事部', '品管部', 
-      '后道车间', '缝制车间', '裁剪部', '临时组', '吊挂组',
-      '钉钉部署', '营销中心', '生产部', '采购部', '快反生产线',
-      '发改委', '生产中心', '财务中心', '国外营销部', '国内营销部',
-      '常规生产线', '人政中心', '总经办', '监委', '仓储部',
-      '交付中心', '配送组', '工艺组', '生管组', '品控中心',
-      '视觉部', '配送部', '物控部', 'IE部',
-      '生产组', '技术部', '财务部', 'IT部', '法务部', '审计部',
-      '培训部', '客服部', '公关部', '市场部', '品牌部', '战略部',
-      '投资部', '运营部', '人力资源部', '行政人事部', '综合管理部'
+    // 营销中心的子部门列表 - 排除设计部
+    const marketingCenterDepartments = [
+      '新媒体', '阿里部', '亚马逊一部', '亚马逊二部', '1688部', '国外营销部'
     ];
     
-    // 过滤部门的函数
+    // 过滤部门的函数 - 只保留营销中心的部门
     const isMainDepartment = (deptName) => {
       if (!deptName || typeof deptName !== 'string') return false;
       const name = deptName.trim();
       if (!name) return false;
-      // 过滤掉需要删除的部门
-      if (departmentsToRemove.includes(name)) return false;
-      // 过滤掉包含特定关键词的部门
-      const excludeKeywords = ['公司', '外部', '职能', '支持', '后勤', '管理'];
-      return !excludeKeywords.some(keyword => name.includes(keyword));
+      // 只保留营销中心的部门
+      return marketingCenterDepartments.includes(name);
     };
     
     const deptSet = new Set()
@@ -449,7 +433,7 @@ const AnnualPlanningChart = () => {
       }
     }
     const collectDept = (arr) => {
-      if (!arr || arr.length === 0) return
+      if (!Array.isArray(arr) || arr.length === 0) return
       for (let i = 0; i < arr.length; i++) {
         const n = getDeptName(arr[i])
         if (n && isMainDepartment(n)) deptSet.add(n)
@@ -488,55 +472,65 @@ const AnnualPlanningChart = () => {
     const idxPlans = new Map()
     const idxEvents = new Map()
     const idxActions = new Map()
-    for (let i = 0; i < targets.length; i++) {
-      const t = targets[i]
-      const m = Number(t.month)
-      const dept = getDeptName(t)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxTargets.get(k) || []
-      arr.push(t)
-      idxTargets.set(k, arr)
+    if (Array.isArray(targets)) {
+      for (let i = 0; i < targets.length; i++) {
+        const t = targets[i]
+        const m = Number(t.month)
+        const dept = getDeptName(t)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxTargets.get(k) || []
+        arr.push(t)
+        idxTargets.set(k, arr)
+      }
     }
-    for (let i = 0; i < monthlyProgress.length; i++) {
-      const p = monthlyProgress[i]
-      const m = Number(p.month)
-      const dept = getDeptName(p)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxProgress.get(k) || []
-      arr.push(p)
-      idxProgress.set(k, arr)
+    if (Array.isArray(monthlyProgress)) {
+      for (let i = 0; i < monthlyProgress.length; i++) {
+        const p = monthlyProgress[i]
+        const m = Number(p.month)
+        const dept = getDeptName(p)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxProgress.get(k) || []
+        arr.push(p)
+        idxProgress.set(k, arr)
+      }
     }
-    for (let i = 0; i < annualPlans.length; i++) {
-      const wp = annualPlans[i]
-      const m = Number(wp.month)
-      const dept = getDeptName(wp)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxPlans.get(k) || []
-      arr.push(wp)
-      idxPlans.set(k, arr)
+    if (Array.isArray(annualPlans)) {
+      for (let i = 0; i < annualPlans.length; i++) {
+        const wp = annualPlans[i]
+        const m = Number(wp.month)
+        const dept = getDeptName(wp)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxPlans.get(k) || []
+        arr.push(wp)
+        idxPlans.set(k, arr)
+      }
     }
-    for (let i = 0; i < majorEvents.length; i++) {
-      const e = majorEvents[i]
-      const m = getEventMonth(e)
-      const dept = getDeptName(e)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxEvents.get(k) || []
-      arr.push(e)
-      idxEvents.set(k, arr)
+    if (Array.isArray(majorEvents)) {
+      for (let i = 0; i < majorEvents.length; i++) {
+        const e = majorEvents[i]
+        const m = getEventMonth(e)
+        const dept = getDeptName(e)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxEvents.get(k) || []
+        arr.push(e)
+        idxEvents.set(k, arr)
+      }
     }
-    for (let i = 0; i < actionPlans.length; i++) {
-      const a = actionPlans[i]
-      const m = getActionMonth(a)
-      const dept = getDeptName(a)
-      if (!m || !dept || !isMainDepartment(dept)) continue
-      const k = keyOf(m, dept)
-      const arr = idxActions.get(k) || []
-      arr.push(a)
-      idxActions.set(k, arr)
+    if (Array.isArray(actionPlans)) {
+      for (let i = 0; i < actionPlans.length; i++) {
+        const a = actionPlans[i]
+        const m = getActionMonth(a)
+        const dept = getDeptName(a)
+        if (!m || !dept || !isMainDepartment(dept)) continue
+        const k = keyOf(m, dept)
+        const arr = idxActions.get(k) || []
+        arr.push(a)
+        idxActions.set(k, arr)
+      }
     }
     for (let i = 0; i < monthsToShow.length; i++) {
       const month = monthsToShow[i]
@@ -562,7 +556,7 @@ const AnnualPlanningChart = () => {
           department,
           sales_amount: totalTarget,
           current_value: totalCurrent,
-          target_level: plan ? (plan.target_level || 'A') : 'A',
+          target_level: relevantTargets.length > 0 ? (relevantTargets[0].target_level || 'A') : 'A',
           description: plan ? plan.description : ''
         })
       }
@@ -642,55 +636,90 @@ const AnnualPlanningChart = () => {
     12: { name: '总结月', color: 'month-total' }
   }
 
+  // 构建部门层级结构
+  const buildDepartmentHierarchy = (deptList) => {
+    // 部门ID到名称的映射
+    const idToName = {};
+    // 父部门到子部门的映射
+    const parentToChildren = {};
+    // 顶级部门列表
+    const topLevelDepts = [];
+    
+    // 营销中心相关部门ID
+    const marketingCenterId = 54;
+    const taimiCompanyId = 58;
+    const taijiangCompanyId = 59;
+    const domesticMarketingId = 51;
+    const foreignMarketingId = 43;
+    
+    // 先构建映射关系
+    deptList.forEach(dept => {
+      idToName[dept.id] = dept.name;
+      if (!parentToChildren[dept.parent_id]) {
+        parentToChildren[dept.parent_id] = [];
+      }
+      parentToChildren[dept.parent_id].push(dept);
+    });
+    
+    // 构建营销中心的层级结构
+    const hierarchy = {
+      name: '营销中心',
+      children: [
+        {
+          name: '泉州太米贸易有限公司',
+          children: [
+            {
+              name: '国内营销部',
+              children: [
+                { name: '新媒体' },
+                { name: '阿里部' }
+              ]
+            }
+          ]
+        },
+        {
+          name: '泉州太匠智能科技有限公司',
+          children: [
+            {
+              name: '国外营销部',
+              children: [
+                { name: '亚马逊一部' },
+                { name: '亚马逊二部' },
+                { name: '1688部' }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+    
+    return hierarchy;
+  };
+  
+  // 递归展平部门层级结构，用于图表数据处理
+  const flattenDepartmentHierarchy = (hierarchy) => {
+    const flat = [];
+    
+    const traverse = (node) => {
+      if (node.children) {
+        node.children.forEach(child => {
+          traverse(child);
+        });
+      } else {
+        flat.push(node.name);
+      }
+    };
+    
+    traverse(hierarchy);
+    return flat;
+  };
+  
   // 使用transformAnnualPlansToChartData计算出的部门列表
   const mainDepartments = React.useMemo(() => {
-    // 需要删除的部门列表 - 包含外部人员和职能部门
-    const departmentsToRemove = [
-      // 外部人员
-      '外协', '客户', '供应商', '外协部',
-      
-      // 职能部门
-      '设计部', '设计组', '计划部', '行政部', '人事部', '品管部', 
-      '后道车间', '缝制车间', '裁剪部', '临时组', '吊挂组',
-      '钉钉部署', '营销中心', '生产部', '采购部', '快反生产线',
-      '发改委', '生产中心', '财务中心', '国外营销部', '国内营销部',
-      '常规生产线', '人政中心', '总经办', '监委', '仓储部',
-      '交付中心', '配送组', '工艺组', '生管组', '品控中心',
-      '视觉部', '配送部', '物控部', 'IE部',
-      '生产组', '技术部', '财务部', 'IT部', '法务部', '审计部',
-      '培训部', '客服部', '公关部', '市场部', '品牌部', '战略部',
-      '投资部', '运营部', '人力资源部', '行政人事部', '综合管理部'
-    ];
-    
-    // 优先使用图表数据计算时确定的部门列表
-    if (chartDepartments && chartDepartments.length > 0) {
-      const unique = [...new Set(chartDepartments.map(d => (d || '').trim()).filter(Boolean))]
-        .filter(dept => {
-          // 过滤掉需要删除的部门
-          if (departmentsToRemove.includes(dept)) return false;
-          // 过滤掉包含特定关键词的部门
-          const excludeKeywords = ['公司', '外部', '职能', '支持', '后勤', '管理'];
-          return !excludeKeywords.some(keyword => dept.includes(keyword));
-        })
-        .sort(); // 按字典序排序
-      return unique
-    }
-    // 如果没有，从data中提取
-    const deptSet = new Set()
-    data.forEach(d => { if (d.department) deptSet.add(d.department.trim()) })
-    const fromData = Array.from(deptSet).filter(Boolean)
-      .filter(dept => {
-        // 过滤掉需要删除的部门
-        if (departmentsToRemove.includes(dept)) return false;
-        // 过滤掉包含特定关键词的部门
-        const excludeKeywords = ['公司', '外部', '职能', '支持', '后勤', '管理'];
-        return !excludeKeywords.some(keyword => dept.includes(keyword));
-      })
-      .sort(); // 按字典序排序
-    if (fromData.length > 0) return fromData
-    // 最后使用默认列表（已排序）
-    return ['平台部', 'SHEIN', '阿里部', '国内定制']
-  }, [chartDepartments, data])
+    // 从departments获取部门数据构建层级
+    const hierarchy = buildDepartmentHierarchy(departments);
+    return flattenDepartmentHierarchy(hierarchy);
+  }, [departments])
 
   // 完成度进度条组件
   const CompletionProgressBar = ({ rate, colorClass = 'from-blue-500 to-purple-600' }) => (
@@ -1248,38 +1277,99 @@ const AnnualPlanningChart = () => {
           <h2 className="text-2xl font-bold text-gray-800">月度业务目标</h2>
         </div>
         <div id="annual-chart" className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-220px)] border border-gray-200 rounded-xl shadow-sm bg-white">
+          {/* 年度规划图表表格 */}
           <table className="w-full border-collapse text-sm text-gray-700 annual-chart-table" style={{ minWidth: `${120 + 200 + (mainDepartments.length * 3) * 140 + 3 * 140}px` }}>
             <thead className="bg-gray-50 text-gray-700 font-semibold sticky top-0 z-30 shadow-sm">
-              <tr>
-                <th rowSpan="2" className="sticky left-0 z-40 annual-chart-head p-3 border-b border-r border-gray-200 w-[120px] text-center shadow-[1px_0_0_0_rgba(229,231,235,1)]">
-                  月份
-                </th>
-                <th rowSpan="2" className="sticky left-[120px] z-40 annual-chart-head p-3 border-b border-r border-gray-200 w-[200px] text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] overflow-hidden whitespace-nowrap">
-                  主题
-                </th>
-                {mainDepartments.map((dept) => (
-                  <th key={dept} colSpan="3" className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th">
-                    {dept}
-                  </th>
-                ))}
-                <th colSpan="3" className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th bg-blue-50">
-                  月度小计
-                </th>
-              </tr>
-              <tr>
-                {mainDepartments.map((dept) => (
-                  <React.Fragment key={dept}>
-                    <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">保底</th>
-                    <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">完成</th>
-                    <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">差异</th>
-                  </React.Fragment>
-                ))}
-                <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th bg-blue-50">总计</th>
-                <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th bg-blue-50">完成</th>
-                <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th bg-blue-50">差异</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+                  {/* 第一行：公司 */}
+                  <tr>
+                    <th rowSpan={3} className="sticky left-0 z-40 annual-chart-head p-3 border-b border-r border-gray-200 w-[120px] text-center shadow-[1px_0_0_0_rgba(229,231,235,1)]">
+                      月份
+                    </th>
+                    <th rowSpan={3} className="sticky left-[120px] z-40 annual-chart-head p-3 border-b border-r border-gray-200 w-[200px] text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] overflow-hidden whitespace-nowrap">
+                      主题
+                    </th>
+                    
+                    {/* 营销中心 */}
+                    <th colSpan={mainDepartments.length * 3} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th">
+                      营销中心
+                    </th>
+                    
+                    {/* 月度小计 */}
+                    <th colSpan={3} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th bg-blue-50">
+                      月度小计
+                    </th>
+                  </tr>
+                  
+                  {/* 第二行：公司 */}
+                  <tr>
+                    {/* 太米贸易 */}
+                    <th colSpan={6} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th">
+                      泉州太米贸易有限公司
+                    </th>
+                    
+                    {/* 太匠智能 */}
+                    <th colSpan={9} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th">
+                      泉州太匠智能科技有限公司
+                    </th>
+                    
+                    {/* 月度小计 */}
+                    <th colSpan={3} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th bg-blue-50">
+                      月度小计
+                    </th>
+                  </tr>
+                  
+                  {/* 第三行：父部门 */}
+                  <tr>
+                    {/* 国内营销部 */}
+                    <th colSpan={6} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th">
+                      国内营销部
+                    </th>
+                    
+                    {/* 国外营销部 */}
+                    <th colSpan={9} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th">
+                      国外营销部
+                    </th>
+                    
+                    {/* 月度小计 */}
+                    <th colSpan={3} className="p-3 border-b border-r border-gray-200 text-center min-w-[420px] whitespace-nowrap annual-chart-group-th bg-blue-50">
+                      月度小计
+                    </th>
+                  </tr>
+                  
+                  {/* 第四行：子部门和指标 */}
+                  <tr>
+                    {/* 新媒体 */}
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">保底</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">完成</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">差异</th>
+                    
+                    {/* 阿里部 */}
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">保底</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">完成</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">差异</th>
+                    
+                    {/* 亚马逊一部 */}
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">保底</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">完成</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">差异</th>
+                    
+                    {/* 亚马逊二部 */}
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">保底</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">完成</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">差异</th>
+                    
+                    {/* 1688部 */}
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">保底</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">完成</th>
+                    <th colSpan="1" className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th">差异</th>
+                    
+                    {/* 月度小计 */}
+                    <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th bg-blue-50">总计</th>
+                    <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th bg-blue-50">完成</th>
+                    <th className="p-3 border-b border-r border-gray-200 font-medium w-[140px] text-center whitespace-nowrap annual-chart-subhead-th bg-blue-50">差异</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
               {(selectedMonth ? [parseInt(selectedMonth)] : Array.from({length: 12}, (_, i) => i + 1)).map((month) => {
                 const planData = monthlyPlanData[month]
                 const displayThemeName = planData?.theme || monthThemes[month].name

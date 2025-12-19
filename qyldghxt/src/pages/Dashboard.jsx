@@ -82,7 +82,7 @@ const Dashboard = () => {
         const [deptResult, empResult, targetResult, planResult, monthlyResult, notifResult] = await Promise.all([
         getDepartments({ type: 'DEPT' }),
         getEmployees(),
-        getDepartmentTargets(), // 获取所有年份的目标数据
+        getDepartmentTargets({ year: globalYear }),
         getActionPlans(),
         getMonthlyProgress({ year: globalYear }),
         getNotifications()

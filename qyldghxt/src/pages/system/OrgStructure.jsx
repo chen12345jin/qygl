@@ -116,7 +116,7 @@ const OrgNode = ({ node, level = 0, defaultExpanded = true, searchTerm = '' }) =
 }
 
 const OrgStructure = () => {
-  const { getOrganizationTree, getEmployees } = useData()
+  const { getOrganizationTree, getEmployees, syncDepartmentsFromDingTalk, syncEmployeesFromDingTalk } = useData()
   const [treeData, setTreeData] = useState([])
   const [loading, setLoading] = useState(false)
   const [allExpanded, setAllExpanded] = useState(false)
@@ -127,6 +127,11 @@ const OrgStructure = () => {
   const handleSync = async () => {
     setLoading(true)
     try {
+      // 先同步钉钉部门数据
+      await syncDepartmentsFromDingTalk()
+      // 再同步钉钉员工数据
+      await syncEmployeesFromDingTalk()
+      // 最后获取最新的组织架构数据
       const [treeRes, empRes] = await Promise.all([getOrganizationTree(), getEmployees()])
       const tree = treeRes.success ? (treeRes.data || []) : []
       const employees = empRes.success ? (empRes.data || []) : []
@@ -254,6 +259,20 @@ const OrgStructure = () => {
               title={allExpanded ? '收起全部' : '展开全部'}
             >
               {allExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+            
+            {/* 同步钉钉组织架构按钮 */}
+            <button
+              onClick={handleSync}
+              disabled={loading}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                loading 
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  : 'bg-green-50 text-green-600 hover:bg-green-100'
+              }`}
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span>{loading ? '同步中' : '同步钉钉组织架构'}</span>
             </button>
             
             {/* 刷新按钮 */}

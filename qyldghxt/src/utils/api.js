@@ -26,19 +26,8 @@ function getWindowBase() {
 }
 
 function resolveBaseURL() {
-  const serverUrl = getServerUrl()
-  if (serverUrl) {
-    return buildApiBase(serverUrl)
-  }
-  const envBase = getEnvBase()
-  if (envBase) {
-    return buildApiBase(envBase)
-  }
-  const windowBase = getWindowBase()
-  if (windowBase) {
-    return buildApiBase(windowBase)
-  }
-  // Always use relative path for development to work with Vite proxy
+  // 开发环境始终使用相对路径，通过 Vite 代理连接
+  // 这样可以避免 localStorage 中的 SERVER_URL 导致的连接问题
   return '/api'
 }
 

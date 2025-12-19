@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useData } from '../contexts/DataContext'
 import { useFormValidation } from '../contexts/FormValidationContext'
-import { Plus, Edit, Trash2, Save, X, Download, Printer, Calculator, FileText, Layers, Calendar, Target, List, Package, Clock, User, MessageSquare, AlertTriangle, Tag, Star, AlignLeft, TrendingUp, BookOpen, CheckSquare, Flag, Users, BarChart3, Upload, Filter, RotateCcw, RefreshCcw, Building, DollarSign } from 'lucide-react'
+import { Plus, Edit, Trash2, Save, X, Download, Printer, Calculator, FileText, Layers, Calendar, Target, List, Package, Clock, User, MessageSquare, AlertTriangle, Tag, Star, AlignLeft, TrendingUp, BookOpen, CheckSquare, Flag, Users, BarChart3, Upload, Filter, RotateCcw, RefreshCcw, Building, DollarSign, Columns } from 'lucide-react'
 import PageHeaderBanner from '../components/PageHeaderBanner'
 import { exportToExcel } from '../utils/export'
 import * as XLSX from 'xlsx'
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import FormField from '../components/FormField'
 import InlineAlert from '../components/InlineAlert'
 import { computeActionPlanStatus, normalizeProgress } from '../utils/status'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
 import CustomSelect from '../components/CustomSelect'
 
 const AnnualPlanning = () => {
@@ -23,6 +24,38 @@ const AnnualPlanning = () => {
   const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [editingCell, setEditingCell] = useState({ row: null, col: null, sheet: null })
   const [currentSheet, setCurrentSheet] = useState('planning')
+  const [hiddenColumns, setHiddenColumns] = useState({})
+  const [showColumnSelector, setShowColumnSelector] = useState(false)
+  const columnSelectorRef = useRef(null)
+
+  // Close column selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target)) {
+        setShowColumnSelector(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const toggleColumnVisibility = (sheet, columnKey) => {
+    setHiddenColumns(prev => {
+      const sheetHidden = prev[sheet] || []
+      if (sheetHidden.includes(columnKey)) {
+        return { ...prev, [sheet]: sheetHidden.filter(k => k !== columnKey) }
+      } else {
+        return { ...prev, [sheet]: [...sheetHidden, columnKey] }
+      }
+    })
+  }
+  
+  const isHidden = (sheet, columnKey) => {
+    return (hiddenColumns[sheet] || []).includes(columnKey)
+  }
+
   // const [selectedYear, setSelectedYear] = useState(new Date().getFullYear()) // Removed
   const selectedYear = globalYear // Map to existing variable name to minimize changes
   const setSelectedYear = setGlobalYear // Map setter to global setter
@@ -1417,6 +1450,21 @@ const AnnualPlanning = () => {
     const errorClass = error ? 'border border-red-500 ring-1 ring-red-500 rounded' : ''
 
     if (isEditing) {
+      if (type === 'select' && (field === 'department' || field === 'responsible_department')) {
+        return (
+          <div className={`w-full ${errorClass}`}>
+            <OrgDepartmentSelect
+              value={value || ''}
+              onChange={(v) => {
+                handleCellEdit(sheet, index, field, v)
+                setEditingCell({ row: null, col: null, sheet: null })
+              }}
+              placeholder="请选择部门"
+              leafOnly
+            />
+          </div>
+        )
+      }
       if (type === 'textarea') {
         return (
           <textarea
@@ -1830,6 +1878,110 @@ const AnnualPlanning = () => {
     toast.success('已提炼至大事件')
   }
 
+  const renderColumnVisibilityToggle = (sheetName) => {
+    const columns = getCurrentSheetColumns()
+    
+    return (
+      <div className="relative" ref={columnSelectorRef}>
+        <button
+          type="button"
+          onClick={() => setShowColumnSelector(!showColumnSelector)}
+          className="px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2 font-semibold"
+          title="列设置"
+        >
+          <Columns size={16} />
+          <span className="hidden sm:inline">列设置</span>
+        </button>
+        
+        {showColumnSelector && (
+          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl z-50 border border-gray-100 p-3 max-h-80 overflow-y-auto">
+            <div className="text-sm font-bold text-gray-700 mb-2 px-1">显示列</div>
+            <div className="space-y-1">
+              {columns.map(col => (
+                <label key={col.key} className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={!isHidden(sheetName, col.key)}
+                    onChange={() => toggleColumnVisibility(sheetName, col.key)}
+                  />
+                  <span className="ml-2 text-sm text-gray-700 truncate">{col.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderDynamicTable = (sheetName, data, errors = {}) => {
+    const columns = getCurrentSheetColumns()
+    
+    return (
+      <div className="overflow-x-auto rounded-3xl shadow-2xl border border-gray-200/50">
+        <table className="w-full border-collapse table-excel-borders table-compact min-w-[1200px]">
+          <thead>
+            <tr>
+              {columns.map(col => {
+                if (isHidden(sheetName, col.key)) return null
+                const isSticky = (col.key === 'month' && sheetName === 'planning')
+                
+                return (
+                  <th key={col.key} className={`px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 backdrop-blur-sm text-sm font-semibold text-gray-700 text-center border-r border-gray-200/50 whitespace-nowrap ${isSticky ? 'sticky left-0 z-10' : ''}`}>
+                    <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
+                      <span>{col.label}</span>
+                      {col.required && <span className="ml-1 text-red-500">*</span>}
+                    </div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, index) => (
+              <tr key={index} className="group hover:bg-blue-50/30 transition-all duration-300 border-b border-gray-100/50">
+                {columns.map(col => {
+                  if (isHidden(sheetName, col.key)) return null
+                  const isSticky = (col.key === 'month' && sheetName === 'planning')
+                  
+                  return (
+                    <td key={col.key} className={`px-4 py-3 border-r border-gray-200/30 transition-colors duration-300 ${isSticky ? 'sticky left-0 bg-white z-10 group-hover:bg-blue-50/30' : ''}`}>
+                      {sheetName === 'planning' && col.key === 'month' ? (
+                        <div className="flex items-center justify-center">
+                          <div className="inline-flex items-center px-3 h-8 rounded-full bg-white ring-1 ring-gray-200 shadow-sm">
+                            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-bold mr-1 ring-2 ring-white shadow-md">
+                              {item.month}
+                            </div>
+                            <span className="text-xs font-medium text-gray-700">月</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <EditableCell
+                            sheet={sheetName}
+                            index={index}
+                            field={col.key}
+                            value={item[col.key]}
+                            type={col.type || 'text'}
+                            options={col.options}
+                            disabled={col.disabled}
+                            render={col.render} // Pass render if EditableCell supports it or handles it
+                          />
+                          {errors && errors[index]?.[col.key] && <span className="text-red-500 text-xs mt-1 block">{errors[index][col.key]}</span>}
+                        </>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   const handleImportEvents = (file) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -2202,6 +2354,8 @@ const AnnualPlanning = () => {
             <div className="text-blue-600 font-semibold">{planningData.data.length} 条规划</div>
           </div>
           
+          {renderColumnVisibilityToggle('planning')}
+
           <button
             className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 relative"
             onClick={() => setShowFilterOpen(prev => !prev)}
@@ -2317,271 +2471,7 @@ const AnnualPlanning = () => {
         </div>
       )}
 
-      <table className="w-full border-collapse rounded-3xl overflow-hidden shadow-2xl table-excel-borders table-compact min-w-[2000px]">
-        <thead>
-          <tr>
-            <th className="px-4 py-3 bg-gradient-to-r from-blue-100/80 to-blue-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap sticky left-0 z-10">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Calendar size={16} />
-                <span>{head('月份')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-blue-100/80 to-blue-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <FileText size={16} />
-                <span>{head('规划名称')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-blue-100/80 to-blue-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Building size={16} />
-                <span>{head('部门')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-blue-100/80 to-blue-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Tag size={16} />
-                <span>{head('类别')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-blue-100/80 to-blue-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Flag size={16} />
-                <span>{head('优先级')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-yellow-100/80 to-yellow-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Calendar size={16} />
-                <span>{head('开始日期')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-yellow-100/80 to-yellow-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Calendar size={16} />
-                <span>{head('结束日期')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-green-100/80 to-green-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <DollarSign size={16} />
-                <span>{head('预算')}</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-green-100/80 to-green-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <DollarSign size={16} />
-                <span>{head('实际成本')}</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-purple-100/80 to-purple-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <CheckSquare size={16} />
-                <span>{head('状态')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-green-100/80 to-green-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Target size={16} />
-                <span>{head('预期结果')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-green-100/80 to-green-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <Target size={16} />
-                <span>{head('实际结果')}</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-purple-100/80 to-purple-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <TrendingUp size={16} />
-                <span>{head('进度')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-purple-100/80 to-purple-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <User size={16} />
-                <span>{head('负责人')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-blue-100/80 to-blue-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center border-r border-gray-200/50 whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <FileText size={16} />
-                <span>{head('详细描述')}</span><span className="ml-1 text-red-500">*</span>
-              </div>
-            </th>
-            <th className="px-4 py-3 bg-gradient-to-r from-gray-100/80 to-gray-200/80 backdrop-blur-sm text-sm font-semibold text-gray-800 text-center whitespace-nowrap">
-              <div className="flex items-center justify-center space-x-2 whitespace-nowrap">
-                <MessageSquare size={16} />
-                <span>{head('备注')}</span>
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {getFilteredPlanning().map(({ item, index }) => (
-            <tr key={index} className="group hover:bg-blue-50/30 transition-all duration-300 border-b border-gray-100/50">
-              <td className="px-4 py-3 text-sm text-gray-700 border-r border-gray-200/30 group-hover:border-gray-200/50 transition-colors sticky left-0 bg-white z-10 group-hover:bg-blue-50/30">
-                <div className="flex items-center justify-center">
-                  <div className="inline-flex items-center px-3 h-8 rounded-full bg-white ring-1 ring-gray-200 shadow-sm">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-bold mr-1 ring-2 ring-white shadow-md">
-                      {item.month}
-                    </div>
-                    <span className="text-xs font-medium text-gray-700">月</span>
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3 font-semibold text-center border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="plan_name"
-                  value={item.plan_name}
-                  type="text"
-                />
-                {planningErrors[index]?.plan_name && <span className="text-red-500 text-xs mt-1 block">{planningErrors[index].plan_name}</span>}
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="department"
-                  value={item.department}
-                  type="select"
-                  options={departments.filter(d => !d.name.includes('公司')).map(d => ({ value: d.name, label: d.name }))}
-                />
-                {planningErrors[index]?.department && <span className="text-red-500 text-xs mt-1 block">{planningErrors[index].department}</span>}
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="category"
-                  value={item.category}
-                  type="select"
-                  options={CATEGORY_OPTIONS}
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="priority"
-                  value={item.priority}
-                  type="select"
-                  options={PRIORITY_OPTIONS}
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="start_date"
-                  value={item.start_date}
-                  type="date"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="end_date"
-                  value={item.end_date}
-                  type="date"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="budget"
-                  value={item.budget}
-                  type="number"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="actual_cost"
-                  value={item.actual_cost}
-                  type="number"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="status"
-                  value={item.status}
-                  type="select"
-                  options={[
-                    { value: 'planning', label: '规划中' },
-                    { value: 'executing', label: '执行中' },
-                    { value: 'completed', label: '已完成' },
-                    { value: 'delayed', label: '已延期' },
-                    { value: 'cancelled', label: '已取消' }
-                  ]}
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="expected_result"
-                  value={item.expected_result}
-                  type="textarea"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="actual_result"
-                  value={item.actual_result}
-                  type="textarea"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="progress"
-                  value={item.progress}
-                  type="number"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="responsible_person"
-                  value={item.responsible_person}
-                  type="text"
-                />
-              </td>
-              <td className="px-4 py-3 border-r border-gray-200/30 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="description"
-                  value={item.description}
-                  type="textarea"
-                />
-              </td>
-              <td className="px-4 py-3 transition-colors duration-300">
-                <EditableCell
-                  sheet="planning"
-                  index={index}
-                  field="remarks"
-                  value={item.remarks}
-                  type="textarea"
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {renderDynamicTable('planning', getFilteredPlanning(), planningErrors)}
     </div>
   )
 
@@ -2602,6 +2492,8 @@ const AnnualPlanning = () => {
           <span className="text-sm text-gray-500 bg-white/50 px-3 py-1 rounded-full border border-gray-200/30">
             共 {eventsData.events.length} 条记录
           </span>
+          
+          {renderColumnVisibilityToggle('events')}
 
           <button
             className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 relative"
@@ -2732,6 +2624,8 @@ const AnnualPlanning = () => {
         </div>
       )}
 
+      {renderDynamicTable('events', getFilteredEvents(), eventsErrors)}
+      {/* 
       <table className="w-full border-collapse rounded-3xl overflow-hidden shadow-2xl table-excel-borders table-compact min-w-[2000px]">
         <thead>
           <tr>
@@ -3002,6 +2896,7 @@ const AnnualPlanning = () => {
           ))}
         </tbody>
       </table>
+      */}
       {showExtractModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="w-[800px] bg-white rounded-2xl shadow-2xl p-6">
@@ -3061,6 +2956,9 @@ const AnnualPlanning = () => {
           <span className="text-sm text-gray-500 bg-white/50 px-3 py-1 rounded-full border border-gray-200/30">
             共 {monthlyPlans.plans.length} 条记录
           </span>
+          
+          {renderColumnVisibilityToggle('monthly')}
+
           <button
             className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 relative"
             onClick={() => setShowFilterOpen(prev => !prev)}
@@ -3160,6 +3058,8 @@ const AnnualPlanning = () => {
         </div>
       )}
 
+      {renderDynamicTable('monthly', getFilteredMonthly(), monthlyErrors)}
+      {/*
       <table className="w-full border-collapse rounded-3xl overflow-hidden shadow-2xl table-excel-borders table-compact min-w-[2400px]">
         <thead>
           <tr>
@@ -3325,6 +3225,7 @@ const AnnualPlanning = () => {
           ))}
         </tbody>
       </table>
+      */}
     </div>
   )
 
@@ -3346,6 +3247,9 @@ const AnnualPlanning = () => {
           <span className="text-sm text-gray-500 bg-white/50 px-3 py-1 rounded-full border border-gray-200/30 mr-2">
             共 {actionPlans.actions.length} 条记录
           </span>
+          
+          {renderColumnVisibilityToggle('action')}
+
           <button
             className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm gap-2 relative"
             onClick={() => setShowFilterOpen(prev => !prev)}
@@ -3470,6 +3374,8 @@ const AnnualPlanning = () => {
         </div>
       )}
 
+      {renderDynamicTable('action', getFilteredActions(), actionErrors)}
+      {/*
       <table className="w-full border-collapse rounded-xl overflow-hidden shadow-lg table-excel-borders min-w-[1800px]">
         <thead>
           <tr>
@@ -3667,6 +3573,7 @@ const AnnualPlanning = () => {
           ))}
         </tbody>
       </table>
+      */}
     </div>
   )
 }

@@ -8,6 +8,8 @@ import * as XLSX from 'xlsx'
 import { exportToExcel } from '../utils/export'
 import PrintPreview from '../components/PrintPreview'
 import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
+import OrgDepartmentSelect from '../components/OrgDepartmentSelect'
+import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
 import toast from 'react-hot-toast'
 import CustomSelect from '../components/CustomSelect'
 
@@ -121,7 +123,8 @@ const AnnualWorkPlan = () => {
   }, [filters.year, yearChangeByUser])
 
   const loadPlans = async () => {
-    const result = await getAnnualWorkPlans(filters)
+    const { department, ...rest } = filters
+    const result = await getAnnualWorkPlans(rest)
     if (result.success) {
       const processed = (result.data || []).map(item => {
         let remarks = item.remarks || ''
@@ -399,6 +402,26 @@ const AnnualWorkPlan = () => {
     handleAdd(newData)
   }
 
+  const filteredPlans = useMemo(
+    () => plans.filter(item => {
+      const department = item.department || item.department_name || ''
+      const category = item.category || ''
+      const status = item.status || ''
+      const month = item.month != null ? String(item.month) : ''
+      const priority = item.priority || ''
+      if (filters.department) {
+        const names = getDescendantDepartmentNames(departments, filters.department)
+        if (names.length > 0 && !names.includes(department)) return false
+      }
+      if (filters.category && category !== filters.category) return false
+      if (filters.status && status !== filters.status) return false
+      if (filters.month && month !== String(filters.month)) return false
+      if (filters.priority && priority !== filters.priority) return false
+      return true
+    }),
+    [plans, filters, departments]
+  )
+
   const getFilterCount = () => {
     let count = 0
     if (filters.year && filters.year !== globalYear) count++
@@ -412,7 +435,7 @@ const AnnualWorkPlan = () => {
   const filterCount = getFilterCount()
 
   const handleExportToExcel = () => {
-    if (!plans || plans.length === 0) {
+    if (!filteredPlans || filteredPlans.length === 0) {
       toast('当前没有可导出的数据', { icon: 'ℹ️' })
       return
     }
@@ -421,7 +444,7 @@ const AnnualWorkPlan = () => {
 
     setTimeout(() => {
       try {
-        const exportData = plans.map(p => ({
+        const exportData = filteredPlans.map(p => ({
           year: p.year,
           department: p.department_name || p.department || '',
           event_name: p.plan_name,
@@ -462,109 +485,30 @@ const AnnualWorkPlan = () => {
       const workbook = XLSX.read(data)
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
-      
-      // 先读取原始数据，检查是否有提示行
-      let rows = XLSX.utils.sheet_to_json(sheet)
-      
-      // 检查第一行是否是提示行
-      if (rows.length > 0) {
-        const firstRowKeys = Object.keys(rows[0])
-        const firstRowValues = Object.values(rows[0]).map(v => String(v || ''))
-        const isHintRow = firstRowKeys.some(k => k.includes('提示') || k.includes('必填') || k.includes('红色')) ||
-                          firstRowValues.some(v => v.includes('提示') || v.includes('必填') || v.includes('红色'))
-        if (isHintRow) {
-          rows = XLSX.utils.sheet_to_json(sheet, { range: 1 })
-        }
-      }
-      
-      // 获取字段值（支持带星号的列名）
-      const getField = (row, ...keys) => {
-        for (const key of keys) {
-          if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key]
-          if (row[key + '*'] !== undefined && row[key + '*'] !== null && row[key + '*'] !== '') return row[key + '*']
-        }
-        return ''
-      }
-      
-      // 月份解析
-      const parseMonthValue = (val) => {
-        if (!val) return null
-        const str = String(val).trim()
-        const match = str.match(/^(\d+)/)
-        if (match) return Number(match[1])
-        return null
-      }
-      
-      // 数值解析
-      const parseNumericValue = (val) => {
-        if (val === null || val === undefined || val === '') return null
-        const str = String(val).replace(/[,，%％]/g, '').trim()
-        const num = parseFloat(str)
-        return isNaN(num) ? null : num
-      }
-      
-      // 去重
-      const seen = new Set()
-      let importedCount = 0
-      let skippedCount = 0
-      
+      const rows = XLSX.utils.sheet_to_json(sheet)
       for (const row of rows) {
-        const hasData = Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '')
-        if (!hasData) {
-          skippedCount++
-          continue
-        }
-        
-        const dept = getField(row, '部门', 'department')
-        const planName = getField(row, '计划名称', '事件名称', 'plan_name', 'event_name')
-        const month = parseMonthValue(getField(row, '月份', 'month'))
-        
-        if (!planName) {
-          skippedCount++
-          continue
-        }
-        
-        const key = `${dept}|${planName}|${month}`
-        if (seen.has(key)) {
-          skippedCount++
-          continue
-        }
-        seen.add(key)
-        
         const payload = {
-          year: Number(getField(row, '年度', 'year')) || filters.year,
-          department: dept,
-          plan_name: planName,
-          month: month,
-          category: getField(row, '类别', '事件类型', 'category'),
-          priority: getField(row, '优先级', '重要级别', '重要性', 'priority'),
-          start_date: getField(row, '开始日期', '开始时间', '发生日期', 'start_date'),
-          end_date: getField(row, '结束日期', '结束时间', '关闭日期', 'end_date'),
-          budget: parseNumericValue(getField(row, '预算（万元）', '预算', 'budget')),
-          actual_cost: parseNumericValue(getField(row, '实际成本（万元）', '实际成本', 'actual_cost')),
-          status: getField(row, '状态', 'status'),
-          expected_result: parseNumericValue(getField(row, '预期结果', 'expected_result')),
-          actual_result: parseNumericValue(getField(row, '实际结果', 'actual_result')),
-          progress: parseNumericValue(getField(row, '进度', '进度（%）', 'progress')),
-          responsible_person: getField(row, '负责人', 'owner', 'responsible_person'),
-          description: getField(row, '预期成果', '复盘要点', '描述', 'description')
+          year: Number(row['年度'] || filters.year),
+          department: row['部门'] || '',
+          plan_name: row['计划名称'] || row['事件名称'] || '',
+          month: row['月份'] ? Number(row['月份']) : null,
+          category: row['类别'] || row['事件类型'] || '',
+          priority: row['优先级'] || row['重要级别'] || '',
+          start_date: row['开始日期'] || row['发生日期'] || '',
+          end_date: row['结束日期'] || row['关闭日期'] || '',
+          budget: row['预算（万元）'] ? Number(row['预算（万元）']) : null,
+          actual_cost: row['实际成本（万元）'] ? Number(row['实际成本（万元）']) : null,
+          status: row['状态'] || '',
+          expected_result: row['预期结果'] ? Number(row['预期结果']) : null,
+          actual_result: row['实际结果'] ? Number(row['实际结果']) : null,
+          progress: row['进度'] ? Number(row['进度']) : null,
+          responsible_person: row['负责人'] || '',
+          description: row['预期成果'] || row['复盘要点'] || ''
         }
-        
-        try {
-          await addAnnualWorkPlan(payload)
-          importedCount++
-        } catch (err) {
-          console.error('导入单条记录失败:', err)
-          skippedCount++
-        }
+        await addAnnualWorkPlan(payload)
       }
       await loadPlans()
-      
-      if (importedCount > 0) {
-        toast.success(`导入完成：成功 ${importedCount} 条${skippedCount > 0 ? `，跳过 ${skippedCount} 条` : ''}`)
-      } else {
-        toast.error(`导入失败：跳过 ${skippedCount} 条。请检查Excel列名是否正确`)
-      }
+      toast.success('导入完成')
     } catch (e) {
       console.error('导入失败:', e)
       toast.error('导入失败，请检查文件格式')
@@ -636,10 +580,21 @@ const AnnualWorkPlan = () => {
       { 
         key: 'department', 
         label: head('负责部门'), 
-        type: 'select',
-        options: departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name })),
+        type: 'custom',
         required: true,
-        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200' 
+        headerClassName: 'text-gray-800 bg-gradient-to-r from-purple-100 to-purple-200 border-b border-gray-200',
+        customField: ({ value, onChange, formData, setFormData }) => (
+          <OrgDepartmentSelect
+            value={formData.department || ''}
+            onChange={(v) => {
+              const next = { ...formData, department: v }
+              setFormData(next)
+              if (onChange) onChange(v)
+            }}
+            placeholder="请选择负责部门"
+            leafOnly
+          />
+        )
       },
       { 
         key: 'category', 
@@ -861,7 +816,6 @@ const AnnualWorkPlan = () => {
       <div className="unified-table-wrapper">
         <TableManager
           title={`${filters.year}年度工作落地规划`}
-          data={plans}
           columns={columns}
           onAdd={handleAdd}
           onEdit={handleEdit}
@@ -914,26 +868,26 @@ const AnnualWorkPlan = () => {
                 )}
               </button>
               <button
-                className={`px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2 font-semibold ${!(filters.department || filters.category || filters.status || filters.month) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-sm flex items-center space-x-2 font-semibold ${!(filters.department || filters.category || filters.status || filters.month || filters.priority) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={resetFilters}
-                disabled={!(filters.department || filters.category || filters.status || filters.month)}
+                disabled={!(filters.department || filters.category || filters.status || filters.month || filters.priority)}
                 title="重置筛选"
               >
                 <RefreshCcw size={16} />
                 <span>重置</span>
               </button>
               <button 
-                className={`px-3 py-2 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg hover:from-green-600 hover:to-teal-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold ${plans.length===0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg hover:from-green-600 hover:to-teal-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold ${filteredPlans.length===0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={handleExportToExcel}
-                disabled={plans.length===0}
+                disabled={filteredPlans.length===0}
               >
                 <Download size={16} />
                 <span>导出Excel</span>
               </button>
               <button
-                className={`px-3 py-2 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-lg hover:from-rose-600 hover:to-pink-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold ${plans.length===0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`px-3 py-2 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-lg hover:from-rose-600 hover:to-pink-700 transition-all duration-300 shadow-md flex items-center space-x-2 font-semibold ${filteredPlans.length===0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 onClick={() => setShowPrintPreview(true)}
-                disabled={plans.length===0}
+                disabled={filteredPlans.length===0}
               >
                 <FileText size={16} />
                 <span>导出PDF</span>
@@ -945,10 +899,11 @@ const AnnualWorkPlan = () => {
               </label>
             </div>
           )}
+          data={filteredPlans}
           pagination={{
             page,
             pageSize,
-            total: plans.length,
+            total: filteredPlans.length,
             onChange: ({ page: p, pageSize: s }) => { setPage(p); setPageSize(s) },
             pageSizeOptions: [10, 20, 50]
           }}
@@ -974,7 +929,7 @@ const AnnualWorkPlan = () => {
                     onChange={(value) => setFilters({ ...filters, department: value })}
                     options={[
                       { value: '', label: '全部部门' },
-                      ...departments.filter(d => !d.name.includes('公司')).map(dept => ({
+                      ...getBusinessDepartments(departments).map(dept => ({
                         value: dept.name,
                         label: dept.name
                       }))
@@ -1137,7 +1092,7 @@ const AnnualWorkPlan = () => {
         isOpen={showPrintPreview}
         onClose={() => setShowPrintPreview(false)}
         title={`${filters.year}年度工作落地规划`}
-        data={plans}
+        data={filteredPlans}
         columns={columns}
         filename={`年度工作落地规划_${filters.year}年`}
         pageType="annualWorkPlans"

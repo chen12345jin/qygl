@@ -16,6 +16,12 @@
     "username": "2",
     "role": "用户",
     "department": "A团队",
-    "password": "$2a$10$FgbHgeOpbI5U8FxWm5zj.ObQCNLqawgRtFGHkRFt0tFzJsjAGcl7m"
+    "password": "$2a$10$FgbHgeOpbI5U8FxWm5zj.ObQCNLqawgRtFGHkRFt0tFzJsjAGcl7m",
+    "permissions": [
+      "dashboard",
+      "profile",
+      "data_analysis",
+      "notifications"
+    ]
   }
 ]
