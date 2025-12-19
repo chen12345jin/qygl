@@ -53,6 +53,7 @@ const Sidebar = ({ collapsed, setCollapsed, currentPath }) => {
     { id: 'roles', icon: Shield, label: '角色管理', path: '/system/roles', perm: '系统管理' },
     { id: 'users', icon: Users, label: '用户管理', path: '/system/users', perm: '用户管理' },
     { id: 'logs', icon: FileText, label: '系统日志', path: '/system/logs', perm: '系统管理' },
+
     { id: 'dingtalk', icon: Bell, label: '钉钉集成', path: '/system/dingtalk', perm: '系统管理' },
     { id: 'settings', icon: Settings, label: '系统设置', path: '/system/settings', perm: '系统管理' },
   ]

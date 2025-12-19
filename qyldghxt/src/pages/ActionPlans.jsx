@@ -34,6 +34,7 @@ import { computeActionPlanStatus, normalizeProgress } from '../utils/status'
 import toast from 'react-hot-toast'
 import PrintPreview from '../components/PrintPreview'
 import CustomSelect from '../components/CustomSelect'
+import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
 
 const validActionPlanStatuses = ['not_started', 'in_progress', 'completed', 'delayed']
 
@@ -167,7 +168,8 @@ const ActionPlans = () => {
   }, [filters])
 
   const loadPlans = async () => {
-    const result = await getActionPlans(filters)
+    const { department, ...rest } = filters
+    const result = await getActionPlans(rest)
     if (result.success) {
       let data = result.data || []
       if (filters.month) {
@@ -202,7 +204,12 @@ const ActionPlans = () => {
         })
       }
       
-      // 优先级筛选
+      if (filters.department) {
+        const names = getDescendantDepartmentNames(departments, filters.department)
+        if (names.length > 0) {
+          data = data.filter(p => names.includes(p.department))
+        }
+      }
       if (filters.priority) {
         data = data.filter(p => p.priority === filters.priority)
       }
@@ -445,130 +452,51 @@ const ActionPlans = () => {
       const workbook = XLSX.read(data)
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
-      
-      // 先读取原始数据，检查是否有提示行
-      let rows = XLSX.utils.sheet_to_json(sheet)
-      
-      // 检查第一行是否是提示行
-      if (rows.length > 0) {
-        const firstRowKeys = Object.keys(rows[0])
-        const firstRowValues = Object.values(rows[0]).map(v => String(v || ''))
-        const isHintRow = firstRowKeys.some(k => k.includes('提示') || k.includes('必填') || k.includes('红色')) ||
-                          firstRowValues.some(v => v.includes('提示') || v.includes('必填') || v.includes('红色'))
-        if (isHintRow) {
-          rows = XLSX.utils.sheet_to_json(sheet, { range: 1 })
-        }
-      }
-      
-      // 获取字段值（支持带星号的列名）
-      const getField = (row, ...keys) => {
-        for (const key of keys) {
-          if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key]
-          if (row[key + '*'] !== undefined && row[key + '*'] !== null && row[key + '*'] !== '') return row[key + '*']
-        }
-        return ''
-      }
-      
-      // 数值解析
-      const parseNumericValue = (val) => {
-        if (val === null || val === undefined || val === '') return null
-        const str = String(val).replace(/[,，%％]/g, '').trim()
-        const num = parseFloat(str)
-        return isNaN(num) ? null : num
-      }
-      
-      const seen = new Set()
-      let importedCount = 0
-      let skippedCount = 0
-      
+      const rows = XLSX.utils.sheet_to_json(sheet)
       for (const row of rows) {
-        const hasData = Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '')
-        if (!hasData) {
-          skippedCount++
-          continue
-        }
-        
-        const goal = getField(row, '目标', '目标（Smart）', '目标（SMART）', 'goal')
-        const what = getField(row, '事项', '事项（做什么What）', 'What（做什么）', 'what')
-        const dept = getField(row, '部门', 'department')
-        
-        // 跳过没有关键数据的行
-        if (!goal && !what) {
-          skippedCount++
-          continue
-        }
-        
-        const key = `${goal}|${what}|${dept}`
-        if (seen.has(key)) {
-          skippedCount++
-          continue
-        }
-        seen.add(key)
-        
-        // 尝试获取开始日期和结束日期
-        const when = getField(row, '日期', '日期（何时做When）', 'When（什么时候做）', 'when')
-        const start_date = getField(row, '开始日期', '开始时间', 'start_date') || when
-        const end_date = getField(row, '结束日期', '结束时间', 'end_date') || when
+        // 尝试获取开始日期和结束日期，如果没有则使用旧的日期字段
+        const when = row['日期'] || row['日期（何时做When）'] || row['When（什么时候做）'] || ''
+        const start_date = row['开始日期'] || row['开始时间'] || when
+        const end_date = row['结束日期'] || row['结束时间'] || when
         
         // 获取投入预算和实际结果
-        const how_much = parseNumericValue(getField(row, '投入预算/程度/数量', '投入预算/程度/数量（做多少How much）', 'How Much（多少成本）', 'how_much'))
-        const actual_result = getField(row, '实际结果', '实际达成', 'actual_result')
-        const expected_result = getField(row, '预期结果', '预期达成', 'expected_result')
+        const how_much = row['投入预算/程度/数量'] || row['投入预算/程度/数量（做多少How much）'] || row['How Much（多少成本）'] || null
+        const actual_result = row['实际结果'] || row['实际达成'] || ''
         
-        // 优先使用导入的进度值
-        let progress = parseNumericValue(getField(row, '进度（%）', '进度', 'progress'))
-        
-        // 如果没有进度值，尝试自动计算
-        if (progress === null && how_much && actual_result) {
-          const actual = parseFloat(actual_result) || 0
-          const budget = parseFloat(how_much) || 0
-          if (budget > 0 && !isNaN(actual)) {
-            progress = (actual / budget) * 100
-          }
+        // 自动计算进度：实际结果 / 投入预算 * 100%
+        const actual = parseFloat(actual_result) || 0
+        const budget = parseFloat(how_much) || 0
+        let progress = 0
+        if (budget > 0 && !isNaN(actual)) {
+          progress = (actual / budget) * 100
         }
-        
-        progress = progress !== null ? parseFloat(progress.toFixed(2)) : 0
+        progress = parseFloat(progress.toFixed(2))
         const normalizedProgress = normalizeProgress(progress)
         
         const payload = {
-          year: Number(getField(row, '年度', 'year')) || filters.year,
-          goal: goal,
+          year: Number(row['年度'] || filters.year),
+          goal: row['目标'] || row['目标（Smart）'] || row['目标（SMART）'] || '',
           start_date: start_date,
           end_date: end_date,
-          what: what,
-          who: getField(row, '执行人/协同人', '执行人/协同人（谁来做Who）', 'Who（谁来做）', 'who'),
-          how: getField(row, '策略方法/执行步骤/行动方案', '策略方法/执行步骤/行动方案（如何做How）', 'How（如何做）', 'how'),
-          why: getField(row, '价值', '价值（为什么Why）', 'Why（为什么做）', 'why'),
+          what: row['事项'] || row['事项（做什么What）'] || row['What（做什么）'] || '',
+          who: row['执行人/协同人'] || row['执行人/协同人（谁来做Who）'] || row['Who（谁来做）'] || '',
+          how: row['策略方法/执行步骤/行动方案'] || row['策略方法/执行步骤/行动方案（如何做How）'] || row['How（如何做）'] || '',
+          why: row['价值'] || row['价值（为什么Why）'] || row['Why（为什么做）'] || '',
           how_much: how_much,
-          department: dept,
-          priority: getField(row, '优先级', 'priority'),
-          expected_result: expected_result,
+          department: row['部门'] || '',
+          priority: row['优先级'] || '',
           actual_result: actual_result,
-          remarks: getField(row, '备注', 'remarks'),
           progress: normalizedProgress
         }
         // 使用结束日期作为状态计算的依据
         payload.status = computeStatus(normalizedProgress, end_date)
-        
-        try {
-          await addActionPlan(payload)
-          importedCount++
-        } catch (err) {
-          console.error('导入单条记录失败:', err)
-          skippedCount++
-        }
+        await addActionPlan(payload)
       }
-      
       await loadPlans()
-      
-      if (importedCount > 0) {
-        toast.success(`导入完成：成功 ${importedCount} 条${skippedCount > 0 ? `，跳过 ${skippedCount} 条` : ''}`)
-      } else {
-        toast.error(`导入失败：跳过 ${skippedCount} 条。请检查Excel列名是否正确`)
-      }
+      alert('导入完成')
     } catch (e) {
       console.error('导入失败:', e)
-      toast.error('导入失败，请检查文件格式')
+      alert('导入失败，请检查文件格式')
     }
   }
 
@@ -632,7 +560,7 @@ const ActionPlans = () => {
       key: 'department', 
       label: '负责部门', 
       type: 'select',
-      options: departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name })),
+      options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
       required: true,
       headerClassName: 'text-gray-800 bg-gradient-to-r from-indigo-100 to-indigo-200 border-b border-gray-200 sticky top-0 z-10'
     },
@@ -988,7 +916,7 @@ const ActionPlans = () => {
                   placeholder="全部部门"
                   options={[
                     { value: '', label: '全部部门' },
-                    ...departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name }))
+                    ...getBusinessDepartments(departments).map(dept => ({ value: dept.name, label: dept.name }))
                   ]}
                   className="focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 />

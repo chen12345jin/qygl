@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import PrintPreview from '../components/PrintPreview'
 import { normalizeProgress, computeActionPlanStatus } from '../utils/status'
 import { useDropzone } from 'react-dropzone'
+import { getLeafDepartments, getBusinessDepartments, getDescendantDepartmentNames } from '../utils/orgSync'
 
 const MonthlyProgress = () => {
   const { globalYear, setGlobalYear, getMonthlyProgress, addMonthlyProgress, updateMonthlyProgress, deleteMonthlyProgress, getDepartments, getSystemSettings, addSystemSetting, updateSystemSetting } = useData()
@@ -175,7 +176,7 @@ const MonthlyProgress = () => {
   }
 
   const loadProgress = async () => {
-    const result = await getMonthlyProgress(filters)
+    const result = await getMonthlyProgress({ year: filters.year })
     if (result.success) {
       let data = result.data || []
       if (filters.month) {
@@ -200,6 +201,27 @@ const MonthlyProgress = () => {
           }
           return false
         })
+      }
+      if (filters.department) {
+        const names = getDescendantDepartmentNames(departments, filters.department)
+        if (names.length > 0) {
+          data = data.filter(p => names.includes(p.department))
+        }
+      }
+      if (filters.status) {
+        const statusMap = {
+          not_started: '待开始',
+          in_progress: '进行中',
+          completed: '已完成',
+          delayed: '已延期'
+        }
+        const target = statusMap[filters.status] || ''
+        if (target) {
+          data = data.filter(p => {
+            const computed = computeStatus(p.completion_rate || 0, p.end_date)
+            return computed === target
+          })
+        }
       }
       const processedData = data.map(item => ({
         ...item,
@@ -323,137 +345,44 @@ const MonthlyProgress = () => {
       const workbook = XLSX.read(data)
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
-      
-      // 先读取原始数据，检查是否有提示行
-      let rows = XLSX.utils.sheet_to_json(sheet)
-      
-      // 检查第一行是否是提示行
-      if (rows.length > 0) {
-        const firstRowKeys = Object.keys(rows[0])
-        const firstRowValues = Object.values(rows[0]).map(v => String(v || ''))
-        const isHintRow = firstRowKeys.some(k => k.includes('提示') || k.includes('必填') || k.includes('红色')) ||
-                          firstRowValues.some(v => v.includes('提示') || v.includes('必填') || v.includes('红色'))
-        if (isHintRow) {
-          rows = XLSX.utils.sheet_to_json(sheet, { range: 1 })
-        }
-      }
-      
+      const rows = XLSX.utils.sheet_to_json(sheet)
       const departmentNames = Array.isArray(departments) ? departments.map(d => d.name).filter(Boolean) : []
-      
-      // 获取字段值（支持带星号的列名）
-      const getField = (row, ...keys) => {
-        for (const key of keys) {
-          if (row[key] !== undefined && row[key] !== null && row[key] !== '') return row[key]
-          if (row[key + '*'] !== undefined && row[key + '*'] !== null && row[key + '*'] !== '') return row[key + '*']
-        }
-        return ''
-      }
-      
-      // 月份解析
-      const parseMonthValue = (val) => {
-        if (!val) return null
-        const str = String(val).trim()
-        const match = str.match(/^(\d+)/)
-        if (match) return Number(match[1])
-        return null
-      }
-      
-      // 数值解析
-      const parseNumericValue = (val) => {
-        if (val === null || val === undefined || val === '') return null
-        const str = String(val).replace(/[,，%％]/g, '').trim()
-        const num = parseFloat(str)
-        return isNaN(num) ? null : num
-      }
-      
-      const seen = new Set()
       const invalidRows = []
-      let importedCount = 0
-      let skippedCount = 0
-      
       for (const row of rows) {
-        const hasData = Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '')
-        if (!hasData) {
-          skippedCount++
-          continue
-        }
-        
-        const rawDepartment = getField(row, '部门', 'department')
-        const taskName = getField(row, '任务名称', 'task_name')
-        const month = parseMonthValue(getField(row, '月份', 'month'))
-        
-        if (!taskName && !rawDepartment) {
-          skippedCount++
-          continue
-        }
-        
-        const key = `${rawDepartment}|${month}|${taskName}`
-        if (seen.has(key)) {
-          skippedCount++
-          continue
-        }
-        seen.add(key)
-        
+        const rawDepartment = row['部门'] || ''
         if (rawDepartment && departmentNames.length > 0 && !departmentNames.includes(rawDepartment)) {
           invalidRows.push(rawDepartment)
           continue
         }
-        
         const payload = {
-          year: Number(getField(row, '年度', 'year')) || filters.year,
-          month: month,
+          year: Number(row['年度'] || filters.year),
+          month: row['月份'] ? Number(row['月份']) : null,
           department: rawDepartment,
-          task_name: taskName,
-          key_activities: getField(row, '核心动作', '关键活动', 'key_activities'),
-          achievements: getField(row, '达成成果', '成果', 'achievements'),
-          challenges: getField(row, '存在问题', '挑战', 'challenges'),
-          next_month_plan: getField(row, '下月规划', '下月计划', 'next_month_plan'),
-          support_needed: getField(row, '所需支持', '支持需求', 'support_needed'),
-          target_value: parseNumericValue(getField(row, '目标值', 'target_value')),
-          actual_value: parseNumericValue(getField(row, '实际值', 'actual_value')),
-          completion_rate: normalizeProgress(getField(row, '完成率', '进度', '进度（%）', 'completion_rate')),
-          status: getField(row, '状态', 'status'),
-          start_date: getField(row, '开始日期', '开始时间', 'start_date'),
-          end_date: getField(row, '结束日期', '结束时间', 'end_date'),
-          responsible_person: getField(row, '负责人', 'responsible_person')
+          task_name: row['任务名称'] || '',
+          key_activities: row['核心动作'] || '',
+          achievements: row['达成成果'] || '',
+          challenges: row['存在问题'] || '',
+          next_month_plan: row['下月规划'] || '',
+          support_needed: row['所需支持'] || '',
+          target_value: row['目标值'] ? Number(row['目标值']) : null,
+          actual_value: row['实际值'] ? Number(row['实际值']) : null,
+          completion_rate: normalizeProgress(row['完成率'] || row['进度'] || row['进度（%）']),
+          status: row['状态'] || '',
+          responsible_person: row['负责人'] || ''
         }
-        
-        try {
-          // 检查是否存在相同年月部门任务的记录
-          const existing = progress.find(p => 
-            Number(p.year) === Number(payload.year) && 
-            Number(p.month) === Number(payload.month) &&
-            p.department === payload.department &&
-            p.task_name === payload.task_name
-          )
-          
-          if (existing && existing.id) {
-            await updateMonthlyProgress(existing.id, { ...existing, ...payload })
-          } else {
-            await addMonthlyProgress(payload)
-          }
-          importedCount++
-        } catch (err) {
-          console.error('导入单条记录失败:', err)
-          skippedCount++
+        const existing = progress.find(p => Number(p.year) === Number(payload.year) && Number(p.month) === Number(payload.month))
+        if (existing && existing.id) {
+          await updateMonthlyProgress(existing.id, { ...existing, ...payload })
+        } else {
+          await addMonthlyProgress(payload)
         }
       }
-      
       await loadProgress()
-      
-      let message = importedCount > 0 ? `导入完成：成功 ${importedCount} 条` : '导入失败'
-      if (skippedCount > 0) {
-        message += `，跳过 ${skippedCount} 条`
-      }
       if (invalidRows.length > 0) {
         const uniqueInvalid = [...new Set(invalidRows)]
-        message += `，${uniqueInvalid.length} 个部门不存在已跳过`
-      }
-      
-      if (importedCount > 0) {
-        toast.success(message)
+        toast.error(`导入完成，但有 ${uniqueInvalid.length} 个部门在系统中不存在，相关行已跳过：${uniqueInvalid.join('、')}`)
       } else {
-        toast.error(message + '。请检查Excel列名是否正确')
+        toast.success('导入完成')
       }
     } catch (e) {
       console.error('导入失败:', e)
@@ -565,7 +494,7 @@ const MonthlyProgress = () => {
       key: 'department', 
       label: '负责部门', 
       type: 'select',
-      options: departments.filter(d => !d.name.includes('公司')).map(dept => ({ value: dept.name, label: dept.name })),
+      options: getLeafDepartments(departments).map(dept => ({ value: dept.name, label: dept.name })),
       required: true,
       headerClassName: 'text-gray-800 bg-gradient-to-r from-green-100 to-green-200 border-b border-gray-200 sticky top-0 z-10'
     },
@@ -897,7 +826,7 @@ const MonthlyProgress = () => {
                   onChange={(e) => setFilters({ ...filters, department: e.target.value })}
                 >
                   <option value="">全部部门</option>
-                  {departments.filter(d => !d.name.includes('公司')).map(dept => (
+                  {getBusinessDepartments(departments).map(dept => (
                     <option key={dept.id} value={dept.name}>{dept.name}</option>
                   ))}
                 </select>

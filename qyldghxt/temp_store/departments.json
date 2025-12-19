@@ -1,21 +1,12 @@
 [
   {
-    "id": 1,
-    "name": "计划部",
-    "code": "483018387",
-    "parent_id": 41,
-    "manager": "",
-    "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
-  },
-  {
     "id": 2,
     "name": "亚马逊一部",
     "code": "124652323",
     "parent_id": 59,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 3,
@@ -24,7 +15,7 @@
     "parent_id": 5,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 4,
@@ -33,7 +24,7 @@
     "parent_id": 55,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 5,
@@ -42,7 +33,7 @@
     "parent_id": 41,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 6,
@@ -51,7 +42,7 @@
     "parent_id": null,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 7,
@@ -60,7 +51,7 @@
     "parent_id": null,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 8,
@@ -69,7 +60,7 @@
     "parent_id": 51,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 9,
@@ -78,7 +69,7 @@
     "parent_id": null,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 10,
@@ -87,7 +78,7 @@
     "parent_id": null,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 11,
@@ -96,7 +87,7 @@
     "parent_id": 2,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 12,
@@ -105,7 +96,7 @@
     "parent_id": 42,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 13,
@@ -114,7 +105,7 @@
     "parent_id": 2,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 14,
@@ -123,7 +114,7 @@
     "parent_id": 42,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 15,
@@ -132,7 +123,7 @@
     "parent_id": 7,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 16,
@@ -141,7 +132,7 @@
     "parent_id": 7,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 17,
@@ -150,7 +141,7 @@
     "parent_id": 7,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 18,
@@ -159,7 +150,7 @@
     "parent_id": 53,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 19,
@@ -168,7 +159,7 @@
     "parent_id": 53,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 20,
@@ -177,16 +168,16 @@
     "parent_id": 53,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 21,
-    "name": "亚马逊电商二部",
+    "name": "亚马逊二部",
     "code": "695638217",
     "parent_id": 59,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 22,
@@ -195,7 +186,7 @@
     "parent_id": 20,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 23,
@@ -204,7 +195,7 @@
     "parent_id": 20,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 24,
@@ -213,7 +204,7 @@
     "parent_id": 20,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 25,
@@ -222,7 +213,7 @@
     "parent_id": 51,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 26,
@@ -231,7 +222,7 @@
     "parent_id": 51,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 27,
@@ -240,7 +231,7 @@
     "parent_id": 50,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 28,
@@ -249,7 +240,7 @@
     "parent_id": 50,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 29,
@@ -258,7 +249,7 @@
     "parent_id": 5,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 30,
@@ -267,7 +258,7 @@
     "parent_id": 50,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 31,
@@ -276,7 +267,7 @@
     "parent_id": 53,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 32,
@@ -285,7 +276,7 @@
     "parent_id": 53,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 33,
@@ -294,7 +285,7 @@
     "parent_id": 55,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 34,
@@ -303,7 +294,7 @@
     "parent_id": 50,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 35,
@@ -312,7 +303,7 @@
     "parent_id": 50,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 36,
@@ -321,7 +312,7 @@
     "parent_id": 41,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 37,
@@ -330,7 +321,7 @@
     "parent_id": 55,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 38,
@@ -339,7 +330,7 @@
     "parent_id": 9,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 39,
@@ -348,7 +339,7 @@
     "parent_id": 52,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 40,
@@ -357,7 +348,7 @@
     "parent_id": 52,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 41,
@@ -366,7 +357,7 @@
     "parent_id": 56,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 42,
@@ -375,7 +366,7 @@
     "parent_id": 52,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 43,
@@ -384,7 +375,7 @@
     "parent_id": 59,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 44,
@@ -393,7 +384,7 @@
     "parent_id": 52,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 45,
@@ -402,7 +393,7 @@
     "parent_id": 52,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 46,
@@ -411,7 +402,7 @@
     "parent_id": 9,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 47,
@@ -420,7 +411,7 @@
     "parent_id": 59,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 48,
@@ -429,7 +420,7 @@
     "parent_id": 41,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 49,
@@ -438,7 +429,7 @@
     "parent_id": 55,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 50,
@@ -447,7 +438,7 @@
     "parent_id": 57,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 51,
@@ -456,7 +447,7 @@
     "parent_id": 58,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 52,
@@ -465,7 +456,7 @@
     "parent_id": 10,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 53,
@@ -474,7 +465,7 @@
     "parent_id": 41,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 54,
@@ -483,7 +474,7 @@
     "parent_id": 9,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 55,
@@ -492,7 +483,7 @@
     "parent_id": 38,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 56,
@@ -501,7 +492,7 @@
     "parent_id": 46,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 57,
@@ -510,7 +501,7 @@
     "parent_id": 46,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 58,
@@ -519,7 +510,7 @@
     "parent_id": 54,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
   },
   {
     "id": 59,
@@ -528,6 +519,23 @@
     "parent_id": 54,
     "manager": "",
     "status": "active",
-    "created_at": "2025-12-16T08:20:54.935Z"
+    "created_at": "2025-12-19T02:39:46.736Z"
+  },
+  {
+    "id": 60,
+    "name": "S团队",
+    "code": "1053365287",
+    "parent_id": 2,
+    "manager": "",
+    "status": "active",
+    "created_at": "2025-12-19T02:39:46.736Z"
+  },
+  {
+    "id": 61,
+    "created_at": "2025-12-19T03:23:01.204Z",
+    "status": "active",
+    "name": "测试部门",
+    "code": "TEST_DEPT",
+    "parent_id": null
   }
 ]

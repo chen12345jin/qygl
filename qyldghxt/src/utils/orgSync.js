@@ -68,3 +68,69 @@ export const mergeEmployeesAsNodes = (nodes, employees) => {
     }
   })
 }
+
+export const getLeafDepartments = (departments) => {
+  if (!Array.isArray(departments)) return []
+  const childrenMap = new Map()
+  for (const dept of departments) {
+    const pid = dept.parentId ?? dept.parent_id ?? dept.parentID ?? dept.parent ?? null
+    if (!pid) continue
+    if (!childrenMap.has(pid)) childrenMap.set(pid, 0)
+    childrenMap.set(pid, childrenMap.get(pid) + 1)
+  }
+  return departments.filter(d => {
+    if (!d || d.id == null) return false
+    const name = String(d.name || '')
+    if (!name || name.includes('公司')) return false
+    return !childrenMap.has(d.id)
+  })
+}
+
+export const getBusinessDepartments = (departments) => {
+  if (!Array.isArray(departments)) return []
+  return departments.filter(d => {
+    if (!d || d.id == null) return false
+    const name = String(d.name || '')
+    if (!name) return false
+    return !name.includes('公司')
+  })
+}
+
+export const getDescendantDepartmentNames = (departments, selectedName) => {
+  if (!Array.isArray(departments) || !selectedName) return []
+  const name = String(selectedName || '').trim()
+  if (!name) return []
+  const byId = new Map()
+  const childrenMap = new Map()
+  for (const dept of departments) {
+    if (!dept || dept.id == null) continue
+    byId.set(dept.id, dept)
+    const pid = dept.parentId ?? dept.parent_id ?? dept.parentID ?? dept.parent ?? null
+    if (!pid) continue
+    if (!childrenMap.has(pid)) childrenMap.set(pid, [])
+    childrenMap.get(pid).push(dept.id)
+  }
+  const roots = departments.filter(d => String(d.name || '') === name).map(d => d.id)
+  if (roots.length === 0) return [name]
+  const resultNames = new Set()
+  const stack = [...roots]
+  while (stack.length) {
+    const id = stack.pop()
+    const node = byId.get(id)
+    if (!node) continue
+    const nodeName = String(node.name || '')
+    if (nodeName && !nodeName.includes('公司')) {
+      resultNames.add(nodeName)
+    }
+    const childIds = childrenMap.get(id)
+    if (Array.isArray(childIds) && childIds.length > 0) {
+      for (const cid of childIds) {
+        stack.push(cid)
+      }
+    }
+  }
+  if (resultNames.size === 0) {
+    resultNames.add(name)
+  }
+  return Array.from(resultNames)
+}

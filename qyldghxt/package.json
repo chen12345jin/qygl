@@ -1,7 +1,7 @@
 {
   "name": "enterprise-annual-planning-system",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.7",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -57,7 +57,7 @@
     "appId": "com.qygl.client",
     "productName": "企业年度规划系统-客户端",
     "directories": {
-      "output": "azb/1.0.5/release/client"
+      "output": "azb/1.0.4/release/client"
     },
     "files": [
       "dist/**/*",

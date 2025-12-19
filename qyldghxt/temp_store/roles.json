@@ -6,7 +6,10 @@
     "code": "user",
     "description": "",
     "permissions": [
-      "view_reports"
+      "dashboard",
+      "profile",
+      "data_analysis",
+      "notifications"
     ]
   },
   {

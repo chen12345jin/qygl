@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../../utils/api'
-import { Save, Shield, Database, Bell, Wifi, Target, Plus, Edit, Trash2, X, RotateCcw, CheckCircle, Ban, Loader2 } from 'lucide-react'
+import { Save, Shield, Database, Bell, Wifi, Target, Plus, Edit, Trash2, X, RotateCcw, RefreshCcw, CheckCircle, Ban, Loader2, Filter, Download, List } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useData } from '../../contexts/DataContext'
 import DeleteConfirmDialog from '../../components/DeleteConfirmDialog'
@@ -8,6 +8,7 @@ import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { useAuth } from '../../contexts/AuthContext'
 import { appVersion } from '../../version'
 import { formatDateTime, applyLocalePrefs } from '../../utils/locale.js'
+import TableActions from '../../components/TableActions'
 
 const SettingsButtons = ({ disabled, onSave, onReset, saving, resetting }) => (
   <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -117,6 +118,17 @@ const SystemSettings = () => {
     notification: null,
     integration: null
   })
+  // 列设置和筛选状态
+  const [showColumnSelector, setShowColumnSelector] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [hiddenColumns, setHiddenColumns] = useState([])
+  const [targetTypeFilters, setTargetTypeFilters] = useState({
+    category: '',
+    isActive: ''
+  })
+  const columnSelectorRef = useRef(null)
+  const filterBtnRef = useRef(null)
+  const dropdownRef = useRef(null)
 
   const formatBackupName = (name) => {
     if (/^system-backup-.*\.json$/.test(name)) {
@@ -1328,7 +1340,7 @@ const SystemSettings = () => {
                   <td className="px-3 py-2 text-right text-gray-600">{(b.size/1024).toFixed(1)} KB</td>
                   <td className="px-3 py-2 text-center">
                     <div className="inline-flex items-center gap-2 justify-center">
-                      <a className="btn-secondary" href={b.url} target="_blank" rel="noreferrer" title="下载备份文件到本地">下载</a>
+                      <a className="btn-secondary" href={b.url} download={b.name} title="下载备份文件到本地">下载</a>
                       <button
                         className="btn-danger"
                         title="删除"
@@ -1377,22 +1389,110 @@ const SystemSettings = () => {
   )
 
   const renderTargetTypes = () => {
+    // 定义目标类型表格列
+    const columns = [
+      { key: 'name', label: '名称' },
+      { key: 'category', label: '分类', render: (val) => categoryLabelMap[val] || val || '-' },
+      { key: 'color', label: '颜色' },
+      { key: 'isActive', label: '启用状态', render: (val) => (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${val ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>
+          {val ? '已启用' : '未启用'}
+        </span>
+      )},
+      { key: 'description', label: '描述', render: (val) => (
+        <span className="inline-block max-w-[260px] truncate" title={val || ''}>{val || '-'}</span>
+      )},
+      { key: 'actions', label: '操作', render: () => null } // 操作列占位符
+    ];
+
+    // 筛选目标类型
+    const filteredTargetTypes = targetTypes.filter(type => {
+      // 分类筛选
+      if (targetTypeFilters.category && type.category !== targetTypeFilters.category) {
+        return false;
+      }
+      // 启用状态筛选
+      if (targetTypeFilters.isActive !== '' && type.isActive !== (targetTypeFilters.isActive === 'true')) {
+        return false;
+      }
+      return true;
+    });
+
+    // 可见列
+    const visibleColumns = columns.filter(col => !hiddenColumns.includes(col.key) && col.key !== 'actions');
+
     return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium text-gray-700">目标类型管理</h3>
-          <p className="text-sm text-gray-500 mt-1">管理系统中的各种目标类型，用于分类和组织企业目标</p>
+      {/* 使用TableActions组件统一处理列设置、筛选、重置和导出功能 */}
+      <TableActions
+        title="目标类型管理"
+        subTitle="管理系统中的各种目标类型，用于分类和组织企业目标"
+        columns={columns}
+        data={filteredTargetTypes}
+        filters={targetTypeFilters}
+        setFilters={setTargetTypeFilters}
+        hiddenColumns={hiddenColumns}
+        setHiddenColumns={setHiddenColumns}
+        isFilterOpen={isFilterOpen}
+        setIsFilterOpen={setIsFilterOpen}
+        exportFileName="目标类型管理"
+        pageType="targetTypes"
+        onAdd={handleAddTargetType}
+        addButtonText="新增类型"
+        showAdd={true}
+        disabled={isEditingType}
+      />
+
+      {/* 筛选面板 */}
+      {isFilterOpen && (
+        <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200 mt-2" ref={dropdownRef}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">分类</label>
+              <select
+                value={targetTypeFilters.category}
+                onChange={(e) => setTargetTypeFilters(prev => ({ ...prev, category: e.target.value }))}
+                className="form-select"
+              >
+                <option value="">全部</option>
+                {categoryOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">启用状态</label>
+              <select
+                value={targetTypeFilters.isActive}
+                onChange={(e) => setTargetTypeFilters(prev => ({ ...prev, isActive: e.target.value }))}
+                className="form-select"
+              >
+                <option value="">全部</option>
+                <option value="true">已启用</option>
+                <option value="false">未启用</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end space-x-2">
+            <button
+              onClick={() => setTargetTypeFilters({
+                category: '',
+                isActive: '',
+                year: new Date().getFullYear()
+              })}
+              className="btn-secondary px-4 py-2"
+            >
+              重置筛选
+            </button>
+            <button
+              onClick={() => setIsFilterOpen(false)}
+              className="btn-primary px-4 py-2"
+            >
+              应用筛选
+            </button>
+          </div>
         </div>
-        <button
-          onClick={handleAddTargetType}
-          className="btn-primary flex items-center space-x-2"
-          disabled={isEditingType}
-        >
-          <Plus size={16} />
-          <span>新增类型</span>
-        </button>
-      </div>
+      )}
 
       {isEditingType && (
         <div className="mt-2 px-3 py-2 bg-yellow-50 border border-yellow-200 text-yellow-700 rounded-lg text-sm">
@@ -1524,41 +1624,40 @@ const SystemSettings = () => {
       )}
 
       {/* 目标类型列表 */}
-      <div className="card p-4 mt-4">
+      <div className="card p-4 mt-4 relative">
         <div className="flex items-center justify-start mb-3">
-          <div className="text-sm text-gray-600">共 {targetTypes.length} 项类型</div>
+          <div className="text-sm text-gray-600">共 {filteredTargetTypes.length} 项类型</div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">名称</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">分类</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">颜色</th>
-                <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">启用状态</th>
-                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">描述</th>
+                {visibleColumns.map(col => (
+                  <th key={col.key} className="px-4 py-2 text-left text-sm font-medium text-gray-700">
+                    {col.label}
+                  </th>
+                ))}
                 <th className="px-4 py-2 text-center text-sm font-medium text-gray-700">操作</th>
               </tr>
             </thead>
             <tbody>
-              {targetTypes.map((t) => (
+              {filteredTargetTypes.map((t) => (
                 <tr key={t.id} className="border-t">
-                  <td className="px-4 py-2 text-sm text-gray-800">
-                    <span className="inline-flex items-center">
-                      <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: t.color || '#3B82F6' }}></span>
-                      {t.name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{categoryLabelMap[t.category] || t.category || '-'}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{t.color || '-'}</td>
-                  <td className="px-4 py-2 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${t.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>
-                      {t.isActive ? '已启用' : '未启用'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-600">
-                    <span className="inline-block max-w-[260px] truncate" title={t.description || ''}>{t.description || '-'}</span>
-                  </td>
+                  {visibleColumns.map(col => {
+                    const value = col.render ? col.render(t[col.key], t) : t[col.key]
+                    return (
+                      <td key={col.key} className={`px-4 py-2 text-sm ${col.key === 'isActive' ? 'text-center' : 'text-left'}`}>
+                        {col.key === 'name' ? (
+                          <span className="inline-flex items-center">
+                            <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: t.color || '#3B82F6' }}></span>
+                            {value}
+                          </span>
+                        ) : (
+                          value
+                        )}
+                      </td>
+                    )
+                  })}
                   <td className="px-4 py-2 text-center">
                     <div className="inline-flex items-center gap-2">
                       <button className="btn-secondary" onClick={() => handleEditTargetType(t)} title="编辑">

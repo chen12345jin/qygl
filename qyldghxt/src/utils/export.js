@@ -13,6 +13,14 @@ const fieldMaps = {
     description: '部门描述',
     created_at: '创建时间'
   },
+  systemLogs: {
+    created_at: '时间',
+    username: '用户',
+    action_type: '操作类型',
+    details: '内容',
+    ip_address: 'IP地址',
+    status: '状态'
+  },
   employees: {
     name: '姓名',
     employee_id: '工号',
@@ -379,6 +387,67 @@ export const exportToExcel = (data, filename, sheetName = 'Sheet1', dataType = '
       })
       ws['!cols'] = colWidths
     }
+    
+    // 设置基本样式
+    // 1. 设置表头样式
+    const headerCells = Object.keys(exportData[0] || {}).map((_, idx) => {
+      const col = String.fromCharCode(65 + idx) // A, B, C, ...
+      return `${col}1`
+    })
+    
+    // 2. 设置单元格样式：背景色、字体颜色、字体粗细
+    headerCells.forEach(cellAddr => {
+      if (ws[cellAddr]) {
+        ws[cellAddr].s = {
+          fill: {
+            fgColor: {
+              rgb: '4F46E5' // 紫色背景
+            }
+          },
+          font: {
+            color: {
+              rgb: 'FFFFFF' // 白色字体
+            },
+            bold: true // 粗体
+          },
+          alignment: {
+            horizontal: 'center',
+            vertical: 'center'
+          }
+        }
+      }
+    })
+    
+    // 3. 设置普通单元格样式
+    Object.keys(ws).forEach(cellAddr => {
+      // 跳过表头和特殊单元格
+      if (cellAddr.startsWith('!') || headerCells.includes(cellAddr)) {
+        return
+      }
+      
+      if (ws[cellAddr]) {
+        ws[cellAddr].s = {
+          alignment: {
+            horizontal: 'left',
+            vertical: 'center'
+          },
+          font: {
+            color: {
+              rgb: '000000' // 黑色字体
+            }
+          }
+        }
+        
+        // 对特定列设置不同的对齐方式
+        const col = cellAddr[0]
+        const headerName = Object.keys(exportData[0] || {})[headerCells.indexOf(`${col}1`)]
+        if (headerName === '优先级' || headerName === '重要程度' || headerName === '状态') {
+          ws[cellAddr].s.alignment.horizontal = 'center'
+        } else if (headerName.includes('日期') || headerName === '进度（%）') {
+          ws[cellAddr].s.alignment.horizontal = 'center'
+        }
+      }
+    })
     
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
     

@@ -22,25 +22,17 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      let serverBase = 'http://localhost:5004'
-      const fromStorage = typeof localStorage !== 'undefined' ? localStorage.getItem('SERVER_URL') : ''
-      const fromWindow = (typeof window !== 'undefined' && window.SERVER_CONFIG && window.SERVER_CONFIG.BASE_URL)
-      if (fromStorage && fromStorage.trim()) {
-        serverBase = fromStorage.trim()
-      } else if (fromWindow && String(fromWindow).trim()) {
-        serverBase = String(fromWindow).trim()
-      }
-      const newSocket = io(serverBase, {
+      // 使用相对路径，通过 Vite 代理连接
+      const newSocket = io({
         path: '/socket.io',
-        transports: ['websocket', 'polling'], // 优先使用 websocket
+        transports: ['polling', 'websocket'], // 优先使用 polling，避免直接 WebSocket 连接失败
         reconnection: true,
-        reconnectionAttempts: 3, // 减少重连尝试次数
-        reconnectionDelay: 5000, // 增加重连间隔到5秒
-        reconnectionDelayMax: 30000, // 最大重连间隔30秒
-        timeout: 20000, // 增加超时时间
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000,
+        timeout: 10000,
         autoConnect: true,
-        forceNew: false, // 避免创建多个连接
-        withCredentials: true
+        forceNew: true,
+        withCredentials: false
       })
 
       newSocket.on('connect', () => {
